@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 
 namespace Safeguard;
 
@@ -89,11 +90,13 @@ public static class MessageBox
             Content = BuildContent(messageBoxText, icon, button, resultSource)
         };
 
+        var completionSource = resultSource;
+
         dialog.Closed += (_, _) =>
         {
-            if (!resultSource.Task.IsCompleted)
+            if (!completionSource.Task.IsCompleted)
             {
-                resultSource.TrySetResult(MessageBoxResult.None);
+                completionSource.TrySetResult(MessageBoxResult.None);
             }
         };
 

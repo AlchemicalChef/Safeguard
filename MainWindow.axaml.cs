@@ -287,7 +287,7 @@ public partial class MainWindow : Window
             };
 
             _authService = new AuthenticationService(config);
-            _authService.OnTokenRefreshed += (sender, expiresOn) => OnTokenRefreshed(expiresOn);
+            _authService.OnTokenRefreshed += OnTokenRefreshed;
             
             AddLogEntry("Authenticating...", LogLevel.Info);
             UpdateStatus("Authenticating...");
@@ -804,23 +804,30 @@ public partial class MainWindow : Window
 
         try
         {
-            var accounts = await _riskyAccountService.ScanForRiskyAccountsAsync();
+            var result = await _riskyAccountService.ScanForRiskyAccountsAsync();
+
+            if (!result.Success)
+            {
+                AddLogEntry(result.ErrorMessage ?? "Risky account scan failed", LogLevel.Error);
+                UpdateStatus("Risky account scan failed");
+                return;
+            }
 
             RiskyAccountsResultsPanel.IsVisible = true;
-            CriticalRiskyCount.Text = accounts.Count(a => a.Severity == RiskSeverity.Critical).ToString();
-            HighRiskyCount.Text = accounts.Count(a => a.Severity == RiskSeverity.High).ToString();
-            MediumRiskyCount.Text = accounts.Count(a => a.Severity == RiskSeverity.Medium).ToString();
+            CriticalRiskyCount.Text = result.RiskyAccounts.Count(a => a.Severity == RiskSeverity.Critical).ToString();
+            HighRiskyCount.Text = result.RiskyAccounts.Count(a => a.Severity == RiskSeverity.High).ToString();
+            MediumRiskyCount.Text = result.RiskyAccounts.Count(a => a.Severity == RiskSeverity.Medium).ToString();
 
-            if (accounts.Count > 0)
+            if (result.RiskyAccounts.Count > 0)
             {
                 RiskyAccountsListBorder.IsVisible = true;
-                foreach (var account in accounts)
+                foreach (var account in result.RiskyAccounts)
                 {
                     _riskyAccounts.Add(account);
                 }
             }
 
-            AddLogEntry($"Found {accounts.Count} risky accounts", LogLevel.Success);
+            AddLogEntry($"Found {result.RiskyAccounts.Count} risky accounts", LogLevel.Success);
         }
         catch (Exception ex)
         {

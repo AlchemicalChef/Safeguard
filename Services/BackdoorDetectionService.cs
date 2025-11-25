@@ -592,7 +592,7 @@ public class BackdoorDetectionService : IDisposable
                         
                         // AADInternals-specific: Check federatedIdpMfaBehavior
                         // Should be "rejectMfaByFederatedIdp" to prevent MFA bypass
-                        if (federationConfig.FederatedIdpMfaBehavior != "rejectMfaByFederatedIdp")
+                        if (federationConfig.FederatedIdpMfaBehavior != FederatedIdpMfaBehavior.RejectMfaByFederatedIdp)
                         {
                             result.Findings.Add(new BackdoorFinding
                             {
@@ -607,7 +607,7 @@ public class BackdoorDetectionService : IDisposable
                                 Details = new Dictionary<string, string>
                                 {
                                     ["DomainId"] = domain.Id ?? "",
-                                    ["CurrentFederatedIdpMfaBehavior"] = federationConfig.FederatedIdpMfaBehavior ?? "Not set",
+                                    ["CurrentFederatedIdpMfaBehavior"] = federationConfig.FederatedIdpMfaBehavior?.ToString() ?? "Not set",
                                     ["RecommendedValue"] = "rejectMfaByFederatedIdp"
                                 },
                                 Recommendation = "Set federatedIdpMfaBehavior to 'rejectMfaByFederatedIdp' to ensure Entra ID enforces MFA " +
@@ -689,8 +689,8 @@ public class BackdoorDetectionService : IDisposable
         {
             DomainId = domain.Id,
             IssuerUri = config.IssuerUri,
-            FederatedIdpMfaBehavior = config.FederatedIdpMfaBehavior,
-            PromptLoginBehavior = config.PromptLoginBehavior,
+            FederatedIdpMfaBehavior = config.FederatedIdpMfaBehavior?.ToString(),
+            PromptLoginBehavior = config.PromptLoginBehavior?.ToString(),
             IsSignedAuthenticationRequestRequired = config.IsSignedAuthenticationRequestRequired ?? false,
             HasSecondarySigningCertificate = !string.IsNullOrEmpty(config.NextSigningCertificate)
         };
@@ -716,7 +716,7 @@ public class BackdoorDetectionService : IDisposable
         }
 
         // Check security issues
-        if (config.FederatedIdpMfaBehavior != "rejectMfaByFederatedIdp")
+        if (config.FederatedIdpMfaBehavior != FederatedIdpMfaBehavior.RejectMfaByFederatedIdp)
             securityConfig.SecurityIssues.Add("MFA bypass possible - federatedIdpMfaBehavior not set correctly");
         
         if (!securityConfig.IsSignedAuthenticationRequestRequired)
@@ -1031,16 +1031,9 @@ public class BackdoorDetectionService : IDisposable
 
                 var suspiciousIndicators = new List<string>();
 
-                if (sp.CreatedDateTime.HasValue)
-                {
-                    var age = DateTime.UtcNow - sp.CreatedDateTime.Value;
-                    if (age.TotalDays < 7 && dangerousPerms.Count > 0)
-                    {
-                        suspiciousIndicators.Add($"App created {age.TotalDays:F0} days ago with dangerous permissions");
-                    }
-                }
+                var publisherName = sp.VerifiedPublisher?.DisplayName;
 
-                if (string.IsNullOrEmpty(sp.PublisherName) && dangerousPerms.Count > 0)
+                if (string.IsNullOrEmpty(publisherName) && dangerousPerms.Count > 0)
                 {
                     suspiciousIndicators.Add("No verified publisher");
                 }
@@ -1074,8 +1067,7 @@ public class BackdoorDetectionService : IDisposable
                         {
                             ["AppId"] = sp.AppId ?? "N/A",
                             ["ServicePrincipalId"] = sp.Id ?? "N/A",
-                            ["Publisher"] = sp.PublisherName ?? "Unknown",
-                            ["CreatedDateTime"] = sp.CreatedDateTime?.ToString("o") ?? "Unknown",
+                            ["Publisher"] = publisherName ?? "Unknown",
                             ["DangerousPermissions"] = string.Join(", ", dangerousPerms)
                         },
                         Recommendation = "Review this application's permissions. If not recognized, delete the service principal.",
@@ -2639,7 +2631,7 @@ public class BackdoorDetectionService : IDisposable
 
             var update = new InternalDomainFederation
             {
-                FederatedIdpMfaBehavior = "rejectMfaByFederatedIdp"
+                FederatedIdpMfaBehavior = FederatedIdpMfaBehavior.RejectMfaByFederatedIdp
             };
 
             await GraphClient.Domains[domainId].FederationConfiguration[config.Id]
