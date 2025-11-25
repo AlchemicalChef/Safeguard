@@ -2353,7 +2353,7 @@ public class BackdoorDetectionService : IDisposable
     /// <summary>
     /// Remediate a backdoor finding based on its type
     /// </summary>
-    public async Task<(bool Success, string Message)> RemediateBackdoorAsync(
+    public async Task<FederationRevocationResult> RemediateBackdoorAsync(
         BackdoorFinding finding,
         CancellationToken cancellationToken = default)
     {
@@ -2363,15 +2363,15 @@ public class BackdoorDetectionService : IDisposable
                 finding.ResourceId ?? finding.AffectedResource ?? "",
                 finding.Details?.GetValueOrDefault("FederationConfigId"),
                 cancellationToken),
-            
+
             BackdoorType.FederationMfaBypass => await FixFederationMfaBypassAsync(
                 finding.ResourceId ?? finding.AffectedResource ?? "",
                 cancellationToken),
-            
+
             BackdoorType.SecondarySigningCertificate => await RemoveSecondarySigningCertificateAsync(
                 finding.ResourceId ?? finding.AffectedResource ?? "",
                 cancellationToken),
-            
+
             BackdoorType.SuspiciousSigningCertificate => await RevokeFederationBackdoorAsync(
                 finding.ResourceId ?? finding.AffectedResource ?? "",
                 finding.Details?.GetValueOrDefault("FederationConfigId"), // May need to get config ID if not present
@@ -2380,7 +2380,7 @@ public class BackdoorDetectionService : IDisposable
             BackdoorType.SuspiciousServicePrincipal => await DeleteServicePrincipalAsync(
                 finding.ResourceId ?? "",
                 cancellationToken),
-            
+
             BackdoorType.AdminConsentGrant => await RevokeOAuthGrantAsync(
                 finding.ResourceId ?? "",
                 cancellationToken),
@@ -2424,7 +2424,7 @@ public class BackdoorDetectionService : IDisposable
                 Message = $"Remediation requires manual verification for rogue device registrations.",
                 ErrorDetails = "Verify the device legitimacy and remove if unauthorized. Review sign-in logs."
             },
-            
+
             // Add FIC backdoor types to remediation
             BackdoorType.FederatedIdentityCredentialBackdoor => await RemoveFederatedIdentityCredentialAsync(finding.ResourceId ?? "", finding.Details?.GetValueOrDefault("FicId") ?? "", cancellationToken) ?
                 new FederationRevocationResult { Success = true, DomainId = finding.ResourceId ?? "", Message = $"Successfully removed FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}" } :
@@ -2438,16 +2438,32 @@ public class BackdoorDetectionService : IDisposable
                 new FederationRevocationResult { Success = true, DomainId = finding.ResourceId ?? "", Message = $"Successfully removed FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}" } :
                 new FederationRevocationResult { Success = false, DomainId = finding.ResourceId ?? "", Message = $"Failed to remove FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}", ErrorDetails = "Could not remove FIC." },
             // </CHANGE>
-            
+
             BackdoorType.CrossTenantAccessTrustMfa or
             BackdoorType.CrossTenantAccessTrustDevice or
             BackdoorType.CrossTenantAccessTrustHybridJoin =>
-                await RemoveCrossTenantTrustAsync(finding.ResourceId ?? "", cancellationToken),
-            
+                await MapTupleResultAsync(finding.ResourceId ?? "", () => RemoveCrossTenantTrustAsync(finding.ResourceId ?? "", cancellationToken)),
+
             BackdoorType.GuestUserWithAdminRole =>
-                await RemoveGuestFromAdminRoleAsync(finding.ResourceId ?? "", finding.TechnicalDetails ?? "", cancellationToken),
-            
-            _ => (false, $"Remediation not supported for {finding.Type}")
+                await MapTupleResultAsync(finding.ResourceId ?? "", () => RemoveGuestFromAdminRoleAsync(finding.ResourceId ?? "", finding.TechnicalDetails ?? "", cancellationToken)),
+
+            _ => new FederationRevocationResult
+            {
+                Success = false,
+                DomainId = finding.ResourceId ?? finding.AffectedResource ?? "",
+                Message = $"Remediation not supported for {finding.Type}"
+            }
+        };
+    }
+
+    private static async Task<FederationRevocationResult> MapTupleResultAsync(string domainId, Func<Task<(bool Success, string Message)>> action)
+    {
+        var result = await action();
+        return new FederationRevocationResult
+        {
+            Success = result.Success,
+            DomainId = domainId,
+            Message = result.Message
         };
     }
 
@@ -2530,6 +2546,187 @@ public class BackdoorDetectionService : IDisposable
                 Success = false,
                 DomainId = grantId,
                 Message = "Failed to revoke OAuth permission grant",
+                ErrorDetails = ex.Message
+            };
+        }
+    }
+
+    public async Task<FederationRevocationResult> RevokeFederationBackdoorAsync(
+        string domainId,
+        string? federationConfigId = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var targetConfigId = federationConfigId;
+
+            if (string.IsNullOrEmpty(targetConfigId))
+            {
+                var config = await GetFederationConfigAsync(domainId, cancellationToken);
+                targetConfigId = config?.Id;
+            }
+
+            if (string.IsNullOrEmpty(targetConfigId))
+            {
+                return new FederationRevocationResult
+                {
+                    Success = false,
+                    DomainId = domainId,
+                    FederationConfigId = targetConfigId,
+                    Message = "No federation configuration found to revoke",
+                    ConvertedToManaged = false
+                };
+            }
+
+            await GraphClient.Domains[domainId].FederationConfiguration[targetConfigId]
+                .DeleteAsync(cancellationToken: cancellationToken);
+
+            return new FederationRevocationResult
+            {
+                Success = true,
+                DomainId = domainId,
+                FederationConfigId = targetConfigId,
+                Message = $"Successfully removed federation configuration {targetConfigId} for domain {domainId}",
+                ConvertedToManaged = true
+            };
+        }
+        catch (TaskCanceledException)
+        {
+            return new FederationRevocationResult
+            {
+                Success = false,
+                DomainId = domainId,
+                FederationConfigId = federationConfigId,
+                Message = "Federation revocation timed out",
+                ErrorDetails = "The operation was canceled or timed out.",
+                ConvertedToManaged = false
+            };
+        }
+        catch (Exception ex)
+        {
+            return new FederationRevocationResult
+            {
+                Success = false,
+                DomainId = domainId,
+                FederationConfigId = federationConfigId,
+                Message = "Failed to revoke federation configuration",
+                ErrorDetails = ex.Message,
+                ConvertedToManaged = false
+            };
+        }
+    }
+
+    public async Task<FederationRevocationResult> FixFederationMfaBypassAsync(
+        string domainId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var config = await GetFederationConfigAsync(domainId, cancellationToken);
+
+            if (config?.Id == null)
+            {
+                return new FederationRevocationResult
+                {
+                    Success = false,
+                    DomainId = domainId,
+                    Message = "No federation configuration found to update"
+                };
+            }
+
+            var update = new InternalDomainFederation
+            {
+                FederatedIdpMfaBehavior = "rejectMfaByFederatedIdp"
+            };
+
+            await GraphClient.Domains[domainId].FederationConfiguration[config.Id]
+                .PatchAsync(update, cancellationToken: cancellationToken);
+
+            return new FederationRevocationResult
+            {
+                Success = true,
+                DomainId = domainId,
+                FederationConfigId = config.Id,
+                Message = "Updated federatedIdpMfaBehavior to rejectMfaByFederatedIdp",
+                ConvertedToManaged = false
+            };
+        }
+        catch (TaskCanceledException)
+        {
+            return new FederationRevocationResult
+            {
+                Success = false,
+                DomainId = domainId,
+                Message = "Updating MFA bypass setting timed out"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new FederationRevocationResult
+            {
+                Success = false,
+                DomainId = domainId,
+                Message = "Failed to update federation MFA behavior",
+                ErrorDetails = ex.Message
+            };
+        }
+    }
+
+    public async Task<FederationRevocationResult> RemoveSecondarySigningCertificateAsync(
+        string domainId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var config = await GetFederationConfigAsync(domainId, cancellationToken);
+
+            if (config?.Id == null)
+            {
+                return new FederationRevocationResult
+                {
+                    Success = false,
+                    DomainId = domainId,
+                    Message = "No federation configuration found to clean up"
+                };
+            }
+
+            var update = new InternalDomainFederation
+            {
+                NextSigningCertificate = null
+            };
+
+            await GraphClient.Domains[domainId].FederationConfiguration[config.Id]
+                .PatchAsync(update, cancellationToken: cancellationToken);
+
+            return new FederationRevocationResult
+            {
+                Success = true,
+                DomainId = domainId,
+                FederationConfigId = config.Id,
+                Message = "Secondary signing certificate removed",
+                ConvertedToManaged = false
+            };
+        }
+        catch (TaskCanceledException)
+        {
+            return new FederationRevocationResult
+            {
+                Success = false,
+                DomainId = domainId,
+                Message = "Removing secondary signing certificate timed out"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new FederationRevocationResult
+            {
+                Success = false,
+                DomainId = domainId,
+                Message = "Failed to remove secondary signing certificate",
                 ErrorDetails = ex.Message
             };
         }
