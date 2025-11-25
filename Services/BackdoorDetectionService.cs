@@ -17,7 +17,6 @@ namespace EntraTokenRevocationGUI.Services;
 /// Based on:
 /// - Mandiant: https://cloud.google.com/blog/topics/threat-intelligence/detecting-microsoft-365-azure-active-directory-backdoors
 /// - AADInternals by Dr Nestori Syynimaa: https://aadinternals.com/talks/
-/// - My own research too 
 /// </summary>
 public class BackdoorDetectionService : IDisposable
 {
@@ -151,6 +150,10 @@ public class BackdoorDetectionService : IDisposable
             progressCallback?.Invoke("Scanning device registrations...");
             await ScanDeviceRegistrationsAsync(result, cancellationToken);
 
+            // Added scan for Federated Identity Credentials
+            progressCallback?.Invoke("Scanning Federated Identity Credentials...");
+            await ScanFederatedIdentityCredentialsAsync(result, cancellationToken);
+
             // Calculate severity counts
             result.CriticalCount = result.Findings.Count(f => f.Severity == SeverityLevel.Critical);
             result.HighCount = result.Findings.Count(f => f.Severity == SeverityLevel.High);
@@ -280,7 +283,7 @@ public class BackdoorDetectionService : IDisposable
                                 {
                                     ["BlockCloudObjectTakeoverThroughHardMatchEnabled"] = syncInfo.BlockCloudObjectTakeoverEnabled.ToString()
                                 },
-                                Recommendation = "Enable cloud object takeover blocking: Set blockCloudObjectTakeoverThroughHardMatchEnabled to true. " +
+                                Recommendation = "Enable cloud object takeover blocking: blockCloudObjectTakeoverThroughHardMatchEnabled to true. " +
                                                 "This prevents attackers from hijacking cloud-only accounts via hard match.",
                                 MitreAttackTechnique = "T1078.004 - Valid Accounts: Cloud Accounts"
                             });
@@ -1606,6 +1609,214 @@ public class BackdoorDetectionService : IDisposable
 
     #endregion
 
+    #region Federated Identity Credential Detection
+
+    private static readonly HashSet<string> KnownLegitimateIssuers = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "https://token.actions.githubusercontent.com",
+        "https://vstoken.dev.azure.com",
+        "https://app.terraform.io",
+        "https://gitlab.com",
+        "https://kubernetes.default.svc",
+        "https://oidc.eks.amazonaws.com",
+        "https://container.googleapis.com",
+        "https://accounts.google.com"
+    };
+
+    private static readonly string[] SuspiciousSubjectPatterns = new[]
+    {
+        "*", // Wildcard - extremely dangerous
+        "repo:*/*", // Overly permissive GitHub pattern
+        "project_path:*/*", // Overly permissive GitLab pattern  
+        "test", "temp", "backdoor", "debug", "admin",
+        "pull_request", // PR-triggered actions can be exploited
+    };
+
+    /// <summary>
+    /// Scans for suspicious Federated Identity Credentials on app registrations
+    /// </summary>
+    public async Task ScanFederatedIdentityCredentialsAsync(ExtendedBackdoorScanResult result, CancellationToken cancellationToken = default)
+    {
+        var graphClient = GraphClient;
+        if (graphClient == null) return;
+
+        try
+        {
+            // Get all applications with their federated identity credentials
+            var applications = await graphClient.Applications
+                .GetAsync(config =>
+                {
+                    config.QueryParameters.Select = new[] { "id", "appId", "displayName", "createdDateTime" };
+                    config.QueryParameters.Top = 999;
+                }, cancellationToken);
+
+            if (applications?.Value == null) return;
+
+            foreach (var app in applications.Value)
+            {
+                if (app.Id == null) continue;
+
+                try
+                {
+                    // Get federated identity credentials for this app
+                    var fics = await graphClient.Applications[app.Id].FederatedIdentityCredentials
+                        .GetAsync(cancellationToken: cancellationToken);
+
+                    if (fics?.Value == null || fics.Value.Count == 0) continue;
+
+                    foreach (var fic in fics.Value)
+                    {
+                        AnalyzeFederatedIdentityCredential(result, app, fic);
+                    }
+                }
+                catch
+                {
+                    // Skip apps we can't read FICs for
+                }
+            }
+        }
+        catch
+        {
+            // Scan failed - logged elsewhere
+        }
+    }
+
+    private void AnalyzeFederatedIdentityCredential(
+        ExtendedBackdoorScanResult result,
+        Microsoft.Graph.Models.Application app,
+        Microsoft.Graph.Models.FederatedIdentityCredential fic)
+    {
+        var findings = new List<string>();
+        var severity = SeverityLevel.Medium;
+        var backdoorType = BackdoorType.FederatedIdentityCredentialBackdoor;
+
+        // Check 1: Unknown or suspicious issuer
+        var issuer = fic.Issuer ?? "";
+        var isKnownIssuer = KnownLegitimateIssuers.Any(k => issuer.StartsWith(k, StringComparison.OrdinalIgnoreCase));
+        
+        if (!isKnownIssuer && !string.IsNullOrEmpty(issuer))
+        {
+            findings.Add($"Unknown issuer: {issuer}");
+            backdoorType = BackdoorType.FederatedIdentityCredentialUnknownIssuer;
+            severity = SeverityLevel.High;
+        }
+
+        // Check 2: Suspicious subject patterns (overly permissive)
+        var subject = fic.Subject ?? "";
+        foreach (var pattern in SuspiciousSubjectPatterns)
+        {
+            if (subject.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+            {
+                findings.Add($"Suspicious subject pattern: '{pattern}' in '{subject}'");
+                backdoorType = BackdoorType.FederatedIdentityCredentialMisconfigured;
+                severity = SeverityLevel.Critical;
+                break;
+            }
+        }
+
+        // Check 3: Wildcard in subject (extremely dangerous)
+        if (subject == "*" || subject.EndsWith(":*") || subject.Contains("*/*"))
+        {
+            findings.Add("Wildcard subject allows any entity to assume this identity");
+            severity = SeverityLevel.Critical;
+        }
+
+        // Check 4: Pull request triggers (can be exploited by external contributors)
+        if (subject.Contains("pull_request", StringComparison.OrdinalIgnoreCase) ||
+            subject.Contains("pull-request", StringComparison.OrdinalIgnoreCase))
+        {
+            findings.Add("FIC allows pull request triggers - external contributors may exploit this");
+            severity = SeverityLevel.High;
+        }
+
+        // Check 5: Recently created FIC (potential indicator of compromise)
+        // Note: FIC doesn't have createdDateTime, so we check the app's creation date
+        if (app.CreatedDateTime.HasValue && app.CreatedDateTime.Value > DateTimeOffset.UtcNow.AddDays(-7))
+        {
+            findings.Add($"App with FIC created recently: {app.CreatedDateTime.Value:yyyy-MM-dd}");
+            if (severity < SeverityLevel.High) severity = SeverityLevel.High;
+        }
+
+        // Check 6: Suspicious audience values
+        var audiences = fic.Audiences ?? new List<string>();
+        foreach (var audience in audiences)
+        {
+            if (audience.Contains("*") || audience == "api://AzureADTokenExchange")
+            {
+                // api://AzureADTokenExchange is normal, but wildcard is not
+                if (audience.Contains("*"))
+                {
+                    findings.Add($"Wildcard audience: {audience}");
+                    severity = SeverityLevel.Critical;
+                }
+            }
+        }
+
+        // Check 7: GitHub Actions with ref:refs/heads/* (any branch)
+        if (issuer.Contains("github", StringComparison.OrdinalIgnoreCase) &&
+            subject.Contains("ref:refs/heads/*", StringComparison.OrdinalIgnoreCase))
+        {
+            findings.Add("GitHub FIC allows any branch - should restrict to specific branches like 'main'");
+            if (severity < SeverityLevel.High) severity = SeverityLevel.High;
+        }
+
+        // Only report if we found issues
+        if (findings.Count > 0)
+        {
+            result.Findings.Add(new BackdoorFinding
+            {
+                Type = backdoorType,
+                Severity = severity,
+                Title = $"Suspicious Federated Identity Credential on app: {app.DisplayName ?? app.Id}",
+                Description = $"The application has a federated identity credential with concerning configuration: {string.Join("; ", findings)}. " +
+                             "Attackers can use misconfigured FICs to impersonate workload identities from external CI/CD pipelines or cloud environments.",
+                AffectedResource = app.DisplayName ?? app.AppId ?? app.Id ?? "Unknown",
+                ResourceId = app.Id ?? "",
+                Details = new Dictionary<string, string>
+                {
+                    ["AppId"] = app.AppId ?? "",
+                    ["AppObjectId"] = app.Id ?? "",
+                    ["AppDisplayName"] = app.DisplayName ?? "",
+                    ["FicName"] = fic.Name ?? "",
+                    ["FicId"] = fic.Id ?? "",
+                    ["Issuer"] = issuer,
+                    ["Subject"] = subject,
+                    ["Audiences"] = string.Join(", ", audiences),
+                    ["Findings"] = string.Join("; ", findings)
+                },
+                Recommendation = "Review and restrict the federated identity credential: " +
+                                "1) Use specific subject claims instead of wildcards; " +
+                                "2) Restrict to specific branches (e.g., 'ref:refs/heads/main'); " +
+                                "3) Verify the issuer is expected; " +
+                                "4) Remove FICs that are no longer needed. " +
+                                "If unauthorized, delete the FIC immediately.",
+                MitreAttackTechnique = "T1550.001 - Use Alternate Authentication Material: Application Access Token"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Removes a federated identity credential from an application
+    /// </summary>
+    public async Task<bool> RemoveFederatedIdentityCredentialAsync(string appObjectId, string ficId, CancellationToken cancellationToken = default)
+    {
+        var graphClient = GraphClient;
+        if (graphClient == null) return false;
+
+        try
+        {
+            await graphClient.Applications[appObjectId].FederatedIdentityCredentials[ficId]
+                .DeleteAsync(cancellationToken: cancellationToken);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    #endregion
+
     #region Remediation Methods
 
     /// <summary>
@@ -1884,6 +2095,20 @@ public class BackdoorDetectionService : IDisposable
                 ErrorDetails = "Verify the device legitimacy and remove if unauthorized. Review sign-in logs."
             },
             
+            // Add remediation for FIC backdoors
+            BackdoorType.FederatedIdentityCredentialBackdoor => await RemoveFederatedIdentityCredentialAsync(finding.ResourceId ?? "", finding.Details?.GetValueOrDefault("FicId") ?? "", cancellationToken) ?
+                new FederationRevocationResult { Success = true, DomainId = finding.ResourceId ?? "", Message = $"Successfully removed FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}" } :
+                new FederationRevocationResult { Success = false, DomainId = finding.ResourceId ?? "", Message = $"Failed to remove FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}", ErrorDetails = "Could not remove FIC." },
+
+            BackdoorType.FederatedIdentityCredentialUnknownIssuer => await RemoveFederatedIdentityCredentialAsync(finding.ResourceId ?? "", finding.Details?.GetValueOrDefault("FicId") ?? "", cancellationToken) ?
+                new FederationRevocationResult { Success = true, DomainId = finding.ResourceId ?? "", Message = $"Successfully removed FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}" } :
+                new FederationRevocationResult { Success = false, DomainId = finding.ResourceId ?? "", Message = $"Failed to remove FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}", ErrorDetails = "Could not remove FIC." },
+
+            BackdoorType.FederatedIdentityCredentialMisconfigured => await RemoveFederatedIdentityCredentialAsync(finding.ResourceId ?? "", finding.Details?.GetValueOrDefault("FicId") ?? "", cancellationToken) ?
+                new FederationRevocationResult { Success = true, DomainId = finding.ResourceId ?? "", Message = $"Successfully removed FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}" } :
+                new FederationRevocationResult { Success = false, DomainId = finding.ResourceId ?? "", Message = $"Failed to remove FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}", ErrorDetails = "Could not remove FIC." },
+            // </CHANGE>
+            
             _ => new FederationRevocationResult
             {
                 Success = false,
@@ -2088,7 +2313,12 @@ public class BackdoorDetectionService : IDisposable
             BackdoorType.SecondarySigningCertificate,
             BackdoorType.SuspiciousSigningCertificate,
             BackdoorType.SuspiciousServicePrincipal,
-            BackdoorType.AdminConsentGrant
+            BackdoorType.AdminConsentGrant,
+            // Add FIC backdoor types to remediation
+            BackdoorType.FederatedIdentityCredentialBackdoor,
+            BackdoorType.FederatedIdentityCredentialUnknownIssuer,
+            BackdoorType.FederatedIdentityCredentialMisconfigured
+            // </CHANGE>
         };
         
         var remediableFindings = findings

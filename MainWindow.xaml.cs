@@ -26,9 +26,11 @@ public partial class MainWindow : Window
     private TokenRevocationService? _revocationService;
     private BackdoorDetectionService? _backdoorService;
     private RiskyAccountService? _riskyAccountService;
+    private AppProvisioningService? _provisioningService;
     private CancellationTokenSource? _cancellationTokenSource;
     private User? _selectedUserForRevocation;
     private string? _currentClientId;
+    private string? _provisionedClientId;
 
     private readonly ObservableCollection<ActivityLogEntry> _activityLog = new();
     private readonly ObservableCollection<UserViewModel> _users = new();
@@ -46,30 +48,21 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        ActivityLogList.ItemsSource = _activityLog;
-        UsersDataGrid.ItemsSource = _users;
-        EnterpriseAppsDataGrid.ItemsSource = _enterpriseApps;
-        FindingsListView.ItemsSource = _findings;
-        RiskyAccountsListView.ItemsSource = _riskyAccounts;
-        
-        MassRevocationConfirmation.Checked += (s, e) => MassRevokeButton.IsEnabled = true;
-        MassRevocationConfirmation.Unchecked += (s, e) => MassRevokeButton.IsEnabled = false;
-        
-        MfaResetConfirmation1.Checked += UpdateMfaResetButtonState;
-        MfaResetConfirmation1.Unchecked += UpdateMfaResetButtonState;
-        MfaResetConfirmation2.Checked += UpdateMfaResetButtonState;
-        MfaResetConfirmation2.Unchecked += UpdateMfaResetButtonState;
+        InitializeServices();
+        ShowSetupWizard();
+    }
 
-        MassAppDeleteConfirmation.Checked += (s, e) => MassDeleteAppsButton.IsEnabled = true;
-        MassAppDeleteConfirmation.Unchecked += (s, e) => MassDeleteAppsButton.IsEnabled = false;
-        
-        _throttleCountdownTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(1)
-        };
-        _throttleCountdownTimer.Tick += ThrottleCountdownTimer_Tick;
-        
-        AddLogEntry("Application started", LogLevel.Info);
+    private void ShowSetupWizard()
+    {
+        SetupWizardPanel.Visibility = Visibility.Visible;
+        LoginPanel.Visibility = Visibility.Collapsed;
+        MainPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void InitializeServices()
+    {
+        // This is a placeholder for future initialization if needed.
+        // Services are currently initialized within event handlers like ConnectButton_Click.
     }
 
     private void OnThrottled(int retryAfterSeconds, string operation)
@@ -606,7 +599,7 @@ public partial class MainWindow : Window
         MfaSuccessCount.Text = result.SuccessCount.ToString();
         MfaFailedCount.Text = result.FailureCount.ToString();
         MfaMethodsRemovedCount.Text = result.TotalMethodsRemoved.ToString();
-        MfaDuration.Text = $"Completed in {result.Duration.TotalSeconds:F1} seconds";
+        MfaDuration.Text = $"Completed in {result.TotalSeconds:F1} seconds";
     }
 
     #endregion
@@ -1856,6 +1849,127 @@ public partial class MainWindow : Window
             RemediateAllCriticalButton.IsEnabled = true;
             UpdateStatus("Ready");
         }
+    }
+
+    #endregion
+
+    #region App Provisioning
+
+    private async void ProvisionAppButton_Click(object sender, RoutedEventArgs e)
+    {
+        var tenantId = SetupTenantIdInput.Text.Trim();
+        if (string.IsNullOrWhiteSpace(tenantId))
+            tenantId = "common";
+
+        ProvisionAppButton.IsEnabled = false;
+        ProvisioningStatusPanel.Visibility = Visibility.Visible;
+        ProvisioningProgressBar.Visibility = Visibility.Visible;
+        ProvisioningSuccessPanel.Visibility = Visibility.Collapsed;
+        ProvisioningErrorPanel.Visibility = Visibility.Collapsed;
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+
+        try
+        {
+            _provisioningService = new AppProvisioningService();
+            _provisioningService.OnStatusUpdate += status =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    ProvisioningStatusText.Text = status;
+                    AddLogEntry(status, LogLevel.Info);
+                });
+            };
+            _provisioningService.OnError += error =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    AddLogEntry(error, LogLevel.Error);
+                });
+            };
+
+            var result = await _provisioningService.ProvisionSafeguardAppAsync(tenantId, cts.Token);
+
+            if (result.Success)
+            {
+                _provisionedClientId = result.ClientId;
+                ProvisioningProgressBar.Visibility = Visibility.Collapsed;
+                ProvisioningSuccessPanel.Visibility = Visibility.Visible;
+                ProvisionedClientIdText.Text = result.ClientId;
+                ProvisionedAppNameText.Text = result.DisplayName;
+
+                if (result.AlreadyExisted)
+                {
+                    AddLogEntry($"Found existing Safeguard app registration", LogLevel.Info);
+                }
+                else
+                {
+                    AddLogEntry($"Successfully provisioned Safeguard app", LogLevel.Success);
+                }
+            }
+            else
+            {
+                ProvisioningProgressBar.Visibility = Visibility.Collapsed;
+                ProvisioningErrorPanel.Visibility = Visibility.Visible;
+                ProvisioningErrorText.Text = result.ErrorMessage ?? "Unknown error occurred";
+                AddLogEntry("Provisioning failed", LogLevel.Error);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            ProvisioningProgressBar.Visibility = Visibility.Collapsed;
+            ProvisioningErrorPanel.Visibility = Visibility.Visible;
+            ProvisioningErrorText.Text = "Provisioning timed out. Please try again.";
+            AddLogEntry("Provisioning timed out", LogLevel.Error);
+        }
+        catch 
+        {
+            ProvisioningProgressBar.Visibility = Visibility.Collapsed;
+            ProvisioningErrorPanel.Visibility = Visibility.Visible;
+            ProvisioningErrorText.Text = "An unexpected error occurred during provisioning.";
+            AddLogEntry("Provisioning error", LogLevel.Error);
+        }
+        finally
+        {
+            ProvisionAppButton.IsEnabled = true;
+        }
+    }
+
+    private void CopyClientIdButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(_provisionedClientId))
+        {
+            Clipboard.SetText(_provisionedClientId);
+            AddLogEntry("Client ID copied to clipboard", LogLevel.Info);
+        }
+    }
+
+    private void ProceedToLoginButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Pre-fill the Client ID and Tenant ID from provisioning
+        if (!string.IsNullOrEmpty(_provisionedClientId))
+        {
+            ClientIdInput.Text = _provisionedClientId;
+        }
+        
+        var setupTenantId = SetupTenantIdInput.Text.Trim();
+        if (!string.IsNullOrWhiteSpace(setupTenantId) && setupTenantId != "common")
+        {
+            TenantIdInput.Text = setupTenantId;
+        }
+
+        SetupWizardPanel.Visibility = Visibility.Collapsed;
+        LoginPanel.Visibility = Visibility.Visible;
+        
+        AddLogEntry("Proceeding to login with provisioned app", LogLevel.Info);
+    }
+
+    private void SkipSetupButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetupWizardPanel.Visibility = Visibility.Collapsed;
+        LoginPanel.Visibility = Visibility.Visible;
+        
+        AddLogEntry("Skipped setup wizard - using existing Client ID", LogLevel.Info);
     }
 
     #endregion

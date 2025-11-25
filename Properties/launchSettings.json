@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "Safeguard": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      },
+      "nativeDebugging": false
+    }
+  }
+}

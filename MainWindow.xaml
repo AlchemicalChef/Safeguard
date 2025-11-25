@@ -86,6 +86,7 @@
         <SolidColorBrush x:Key="DangerBrush" Color="#D1233A"/>
         <SolidColorBrush x:Key="SuccessBrush" Color="#3A9A3A"/>
         <SolidColorBrush x:Key="BorderBrush" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#FAFAFA"/>
     </Window.Resources>
 
     <Grid>
@@ -165,6 +166,212 @@
 
         <!-- Main Content - Update Grid.Row from 1 to 2 -->
         <Grid Grid.Row="2" Margin="20">
+            <!-- ADDED: Setup Wizard panel -->
+            <Border x:Name="SetupWizardPanel" Style="{StaticResource CardStyle}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    MaxWidth="600" Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock Text="Safeguard Setup Wizard" FontSize="24" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                    <TextBlock Text="This wizard will create the required Entra ID application registration with all necessary permissions."
+                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,0,0,24" TextWrapping="Wrap"/>
+
+                    <!-- Step 1: Tenant Selection -->
+                    <Border Background="{StaticResource SurfaceBrush}" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <Border Background="{StaticResource PrimaryBrush}" CornerRadius="12" 
+                                        Width="24" Height="24" Margin="0,0,12,0">
+                                    <TextBlock Text="1" Foreground="White" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Text="Specify Target Tenant" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <TextBlock Text="Enter the Tenant ID where Safeguard will be registered. Use 'common' for multi-tenant or your specific tenant ID."
+                                       FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="36,0,0,12"/>
+                            
+                            <StackPanel Orientation="Horizontal" Margin="36,0,0,0">
+                                <TextBlock Text="Tenant ID:" FontSize="12" VerticalAlignment="Center" 
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
+                                <TextBox x:Name="SetupTenantIdInput" Text="common" Width="300"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Step 2: Permissions Overview -->
+                    <Border Background="{StaticResource SurfaceBrush}" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <Border Background="{StaticResource PrimaryBrush}" CornerRadius="12" 
+                                        Width="24" Height="24" Margin="0,0,12,0">
+                                    <TextBlock Text="2" Foreground="White" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Text="Required Permissions" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="36,0,0,8">
+                                The following Microsoft Graph delegated permissions will be configured:
+                            </TextBlock>
+                            
+                            <Border Background="{StaticResource BackgroundBrush}" CornerRadius="4" 
+                                    Padding="12" Margin="36,0,0,0">
+                                <StackPanel>
+                                    <TextBlock FontSize="11" FontFamily="Consolas" Foreground="{StaticResource TextSecondaryBrush}">
+                                        • User.ReadWrite.All - Manage users and revoke tokens
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" FontFamily="Consolas" Foreground="{StaticResource TextSecondaryBrush}">
+                                        • Directory.ReadWrite.All - Read directory data, manage federation
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" FontFamily="Consolas" Foreground="{StaticResource TextSecondaryBrush}">
+                                        • UserAuthenticationMethod.ReadWrite.All - Reset MFA
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" FontFamily="Consolas" Foreground="{StaticResource TextSecondaryBrush}">
+                                        • Application.ReadWrite.All - Detect/remediate app backdoors
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" FontFamily="Consolas" Foreground="{StaticResource TextSecondaryBrush}">
+                                        • Domain.ReadWrite.All - Detect/remediate federation backdoors
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" FontFamily="Consolas" Foreground="{StaticResource TextSecondaryBrush}">
+                                        • DelegatedPermissionGrant.ReadWrite.All - Revoke OAuth grants
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" FontFamily="Consolas" Foreground="{StaticResource TextSecondaryBrush}">
+                                        • Device.Read.All - Detect rogue device registrations
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" FontFamily="Consolas" Foreground="{StaticResource TextSecondaryBrush}">
+                                        • AuditLog.Read.All - Review security audit logs
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Step 3: Authentication -->
+                    <Border Background="{StaticResource SurfaceBrush}" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <Border Background="{StaticResource PrimaryBrush}" CornerRadius="12" 
+                                        Width="24" Height="24" Margin="0,0,12,0">
+                                    <TextBlock Text="3" Foreground="White" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Text="Authenticate &amp; Provision" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="36,0,0,12">
+                                Click the button below to open a browser window. Sign in with a Global Administrator account to create the application registration and grant admin consent.
+                            </TextBlock>
+
+                            <Border x:Name="SetupWarningBanner" Background="#FFF3E0" CornerRadius="4" 
+                                    Padding="12" Margin="36,0,0,12">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⚠" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock FontSize="12" Foreground="#E65100" TextWrapping="Wrap" VerticalAlignment="Center">
+                                        Global Administrator privileges are required for this one-time setup.
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <Button x:Name="ProvisionAppButton" Content="Create Safeguard App Registration"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Click="ProvisionAppButton_Click" Margin="36,0,0,0" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Provisioning Status -->
+                    <Border x:Name="ProvisioningStatusPanel" Background="{StaticResource SurfaceBrush}" 
+                            CornerRadius="8" Padding="16" Margin="0,0,0,16" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="Provisioning Status" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
+                            <TextBlock x:Name="ProvisioningStatusText" FontSize="12" 
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                            <ProgressBar x:Name="ProvisioningProgressBar" IsIndeterminate="True" 
+                                         Height="4" Margin="0,12,0,0" Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Provisioning Success -->
+                    <Border x:Name="ProvisioningSuccessPanel" Background="#E8F5E9" 
+                            CornerRadius="8" Padding="16" Margin="0,0,0,16" Visibility="Collapsed">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <TextBlock Text="✓" FontSize="20" Foreground="#2E7D32" 
+                                           FontWeight="Bold" Margin="0,0,12,0"/>
+                                <TextBlock Text="Application Provisioned Successfully" FontSize="14" 
+                                           FontWeight="SemiBold" Foreground="#2E7D32" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                
+                                <TextBlock Text="Client ID:" FontSize="12" FontWeight="SemiBold" 
+                                           Foreground="{StaticResource TextPrimaryBrush}" 
+                                           Grid.Row="0" Grid.Column="0" Margin="0,0,12,4"/>
+                                <TextBlock x:Name="ProvisionedClientIdText" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           Grid.Row="0" Grid.Column="1"/>
+                                
+                                <TextBlock Text="App Name:" FontSize="12" FontWeight="SemiBold" 
+                                           Foreground="{StaticResource TextPrimaryBrush}" 
+                                           Grid.Row="1" Grid.Column="0" Margin="0,0,12,0"/>
+                                <TextBlock x:Name="ProvisionedAppNameText" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           Grid.Row="1" Grid.Column="1"/>
+                            </Grid>
+                            
+                            <Button x:Name="CopyClientIdButton" Content="Copy Client ID"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Click="CopyClientIdButton_Click" HorizontalAlignment="Left" Margin="0,0,0,12"/>
+                            
+                            <Button x:Name="ProceedToLoginButton" Content="Continue to Login"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Click="ProceedToLoginButton_Click" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Provisioning Error -->
+                    <Border x:Name="ProvisioningErrorPanel" Background="#FFEBEE" 
+                            CornerRadius="8" Padding="16" Margin="0,0,0,16" Visibility="Collapsed">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Text="✗" FontSize="20" Foreground="{StaticResource DangerBrush}" 
+                                           FontWeight="Bold" Margin="0,0,12,0"/>
+                                <TextBlock Text="Provisioning Failed" FontSize="14" 
+                                           FontWeight="SemiBold" Foreground="{StaticResource DangerBrush}" 
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock x:Name="ProvisioningErrorText" FontSize="12" 
+                                       Foreground="{StaticResource DangerBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Navigation -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="SkipSetupButton" Content="I already have a Client ID"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Click="SkipSetupButton_Click" Margin="0,0,12,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- Not Authenticated View -->
             <Border x:Name="LoginPanel" Style="{StaticResource CardStyle}"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -356,7 +563,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
+                                        </Grid.Definition>
                                         <TextBox x:Name="SingleUserInput" Grid.Column="0"
                                                  ToolTip="Enter User Principal Name (email) or Object ID"/>
                                         <Button Grid.Column="1" Content="Look Up"
@@ -1270,6 +1477,7 @@
                             </Border>
                         </TabItem>
                         
+                        <!-- App Cleanup Tab -->
                         <TabItem Header="App Cleanup">
                             <Border Style="{StaticResource CardStyle}" Margin="0,16,0,0">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">

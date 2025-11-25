@@ -52,14 +52,18 @@ public enum BackdoorType
     PrivilegedSyncAccount,
     DirectorySyncFeatureMisconfiguration,
     
-    FociTokenAbuse,                    // Family of Client IDs token portability abuse
-    SeamlessSsoBackdoor,               // AZUREADSSOACC computer account compromise
-    RogueDeviceRegistration,           // Device join for PRT theft
-    SuspiciousRedirectUri,             // Apps with dangerous redirect URIs
-    ImplicitFlowEnabled,               // Legacy OAuth implicit grant flow
-    PublicClientWithSecrets,           // Public client app with secrets (misconfiguration)
-    RefreshTokenReplay,                // Indicators of refresh token theft/replay
-    PrimaryRefreshTokenTheft           // PRT theft indicators
+    FociTokenAbuse,
+    SeamlessSsoBackdoor,
+    RogueDeviceRegistration,
+    SuspiciousRedirectUri,
+    ImplicitFlowEnabled,
+    PublicClientWithSecrets,
+    RefreshTokenReplay,
+    PrimaryRefreshTokenTheft,
+    
+    FederatedIdentityCredentialBackdoor,   // Suspicious FIC on app registration
+    FederatedIdentityCredentialMisconfigured, // Overly permissive subject/issuer
+    FederatedIdentityCredentialUnknownIssuer  // FIC with unknown external IdP
 }
 
 /// <summary>
