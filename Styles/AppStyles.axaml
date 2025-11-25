@@ -128,7 +128,6 @@
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="GridLinesVisibility" Value="Horizontal"/>
         <Setter Property="RowBackground" Value="White"/>
-        <Setter Property="AlternatingRowBackground" Value="#FAFAFA"/>
     </Style>
 
 </Styles>

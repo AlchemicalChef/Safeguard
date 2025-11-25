@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Avalonia.Media;
 
 namespace Safeguard.Models;
 
@@ -110,6 +111,7 @@ public class FindingViewModel
     public string Title { get; set; } = string.Empty;
     public string TypeDisplay { get; set; } = string.Empty;
     public SeverityLevel Severity { get; set; }
+    public ISolidColorBrush SeverityColor => new SolidColorBrush(GetSeverityColor(Severity));
     public string Description { get; set; } = string.Empty;
     public string? AffectedResource { get; set; }
     public string? ResourceId { get; set; }
@@ -117,4 +119,16 @@ public class FindingViewModel
     public string MitreAttackId { get; set; } = string.Empty;
     public Dictionary<string, string> Details { get; set; } = new();
     public BackdoorFinding? Finding { get; set; }
+
+    private static Color GetSeverityColor(SeverityLevel severity)
+    {
+        return severity switch
+        {
+            SeverityLevel.Critical => Color.Parse("#D32F2F"),
+            SeverityLevel.High => Color.Parse("#F57C00"),
+            SeverityLevel.Medium => Color.Parse("#FBC02D"),
+            SeverityLevel.Low => Color.Parse("#1B3A57"),
+            _ => Color.Parse("#5C5C5C")
+        };
+    }
 }
