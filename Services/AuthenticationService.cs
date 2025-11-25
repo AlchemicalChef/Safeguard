@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Graph;
 using Microsoft.Identity.Client;
-using Safeguard.Models;
+using AuthenticationResult = Safeguard.Models.AuthenticationResult;
 
 namespace Safeguard.Services;
 

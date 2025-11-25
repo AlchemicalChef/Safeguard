@@ -7,14 +7,14 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Threading;
 using Safeguard.Models;
 using Safeguard.Services;
 using Microsoft.Graph.Models;
-using Microsoft.Win32;
 using System.Security;
 using System.Text.RegularExpressions;
 
@@ -48,6 +48,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _throttleCountdownTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _throttleCountdownTimer.Tick += ThrottleCountdownTimer_Tick;
         InitializeServices();
         ShowSetupWizard();
     }
@@ -67,7 +72,7 @@ public partial class MainWindow : Window
 
     private void OnThrottled(int retryAfterSeconds, string operation)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             // Prevent alert spam - don't show if we showed one in the last 5 seconds
             if ((DateTime.Now - _lastThrottleAlert).TotalSeconds < 5)
@@ -191,7 +196,7 @@ public partial class MainWindow : Window
                 LoginPanel.Visibility = Visibility.Collapsed;
                 MainPanel.Visibility = Visibility.Visible;
                 
-                AuthStatusIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#107C10"));
+                AuthStatusIndicator.Fill = new SolidColorBrush(Color.Parse("#107C10"));
                 AuthStatusText.Text = result.UserPrincipalName;
                 AuthMethodText.Text = $"({result.AuthMethod})";
                 SignOutButton.Visibility = Visibility.Visible;
@@ -238,7 +243,7 @@ public partial class MainWindow : Window
     // Updated method signature to accept DateTimeOffset
     private void OnTokenRefreshed(DateTimeOffset expiresOn)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             var remaining = expiresOn - DateTimeOffset.UtcNow;
             var color = remaining.TotalMinutes > 60 ? "#107C10" : // Green
@@ -248,7 +253,7 @@ public partial class MainWindow : Window
             {
                 tokenStatus.Text = $"Token: {remaining.TotalMinutes:F0}m remaining";
                 tokenStatus.Foreground = new SolidColorBrush(
-                    (Color)ColorConverter.ConvertFromString(color));
+                    Color.Parse(color));
             }
             
             AddLogEntry("Token refreshed successfully", LogLevel.Info);
@@ -261,17 +266,17 @@ public partial class MainWindow : Window
         if (timeRemaining.TotalMinutes > 60)
         {
             TokenStatusText.Text = $"Token valid for {timeRemaining.Hours}h {timeRemaining.Minutes}m";
-            TokenStatusText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#107C10"));
+            TokenStatusText.Foreground = new SolidColorBrush(Color.Parse("#107C10"));
         }
         else if (timeRemaining.TotalMinutes > 10)
         {
             TokenStatusText.Text = $"Token valid for {timeRemaining.Minutes}m";
-            TokenStatusText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF8C00"));
+            TokenStatusText.Foreground = new SolidColorBrush(Color.Parse("#FF8C00"));
         }
         else
         {
             TokenStatusText.Text = $"Token expires soon ({timeRemaining.Minutes}m)";
-            TokenStatusText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D32F2F"));
+            TokenStatusText.Foreground = new SolidColorBrush(Color.Parse("#D32F2F"));
         }
     }
 
@@ -384,7 +389,7 @@ public partial class MainWindow : Window
     {
         SingleResultPanel.Visibility = Visibility.Visible;
         SingleResultPanel.Background = new SolidColorBrush(
-            (Color)ColorConverter.ConvertFromString(success ? "#E8F5E9" : "#FFEBEE"));
+            Color.Parse(success ? "#E8F5E9" : "#FFEBEE"));
         SingleResultIcon.Text = success ? "✓" : "✗";
         SingleResultIcon.Foreground = success 
             ? (SolidColorBrush)FindResource("SuccessBrush") 
@@ -467,7 +472,7 @@ public partial class MainWindow : Window
 
     private void OnMassRevocationProgress(int current, int total, string currentUser)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             var percent = (double)current / total * 100;
             MassProgressBar.Value = percent;
@@ -582,7 +587,7 @@ public partial class MainWindow : Window
 
     private void OnMfaResetProgress(int current, int total, string currentUser)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             var percent = (double)current / total * 100;
             MfaProgressBar.Value = percent;
@@ -794,7 +799,7 @@ public partial class MainWindow : Window
     {
         AppDeleteResultPanel.Visibility = Visibility.Visible;
         AppDeleteResultPanel.Background = new SolidColorBrush(
-            (Color)ColorConverter.ConvertFromString(success ? "#E8F5E9" : "#FFEBEE"));
+            Color.Parse(success ? "#E8F5E9" : "#FFEBEE"));
         AppDeleteResultIcon.Text = success ? "✓" : "✗";
         AppDeleteResultIcon.Foreground = success 
             ? (SolidColorBrush)FindResource("SuccessBrush") 
@@ -880,7 +885,7 @@ public partial class MainWindow : Window
 
     private void OnAppCleanupProgress(int current, int total, string currentApp)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             var percent = (double)current / total * 100;
             AppCleanupProgressBar.Value = percent;
@@ -941,7 +946,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UserSearchInput_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)
+    private void UserSearchInput_KeyUp(object sender, KeyEventArgs e)
     {
         var searchText = UserSearchInput.Text.ToLower();
         
@@ -959,17 +964,16 @@ public partial class MainWindow : Window
             }
         }
 
-        UsersDataGrid.Items.Refresh();
     }
 
-    private void UsersDataGrid_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    private void UsersDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         // Selection handling if needed
     }
 
     private async void RevokeFromGridButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not System.Windows.Controls.Button button) return;
+        if (sender is not Button button) return;
         if (button.DataContext is not UserViewModel user) return;
         if (_revocationService == null || string.IsNullOrEmpty(user.Id)) return;
 
@@ -1030,14 +1034,14 @@ public partial class MainWindow : Window
             Level = level,
             StatusColor = level switch
             {
-                LogLevel.Success => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#107C10")),
-                LogLevel.Error => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D13438")),
-                LogLevel.Warning => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFB900")),
-                _ => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0078D4"))
+                LogLevel.Success => new SolidColorBrush(Color.Parse("#107C10")),
+                LogLevel.Error => new SolidColorBrush(Color.Parse("#D13438")),
+                LogLevel.Warning => new SolidColorBrush(Color.Parse("#FFB900")),
+                _ => new SolidColorBrush(Color.Parse("#0078D4"))
             }
         };
 
-        Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             _activityLog.Insert(0, entry);
             
@@ -1047,41 +1051,53 @@ public partial class MainWindow : Window
         });
     }
 
-    private void ExportAuditLogButton_Click(object sender, RoutedEventArgs e)
+    private async void ExportAuditLogButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new SaveFileDialog
         {
-            Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
-            DefaultExt = ".json",
-            FileName = $"audit_log_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+            Filters = new List<FileDialogFilter>
+            {
+                new()
+                {
+                    Name = "JSON files",
+                    Extensions = new List<string> {"json"}
+                },
+                new()
+                {
+                    Name = "All files",
+                    Extensions = new List<string> {"*"}
+                }
+            },
+            InitialFileName = $"audit_log_{DateTime.Now:yyyyMMdd_HHmmss}.json"
         };
+        var path = await dialog.ShowAsync(this);
 
-        if (dialog.ShowDialog() == true)
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        try
         {
-            try
+            var entries = _activityLog.Select(entry => new
             {
-                var entries = _activityLog.Select(entry => new
-                {
-                    entry.Timestamp,
-                    // Redact email addresses and UPNs from log messages
-                    Message = SanitizeLogMessage(entry.Message),
-                    Level = entry.Level.ToString()
-                });
+                entry.Timestamp,
+                // Redact email addresses and UPNs from log messages
+                Message = SanitizeLogMessage(entry.Message),
+                Level = entry.Level.ToString()
+            });
 
-                var json = System.Text.Json.JsonSerializer.Serialize(entries, new System.Text.Json.JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
-
-                System.IO.File.WriteAllText(dialog.FileName, json);
-                AddLogEntry("Audit log exported", LogLevel.Success);
-                MessageBox.Show("Audit log exported successfully", "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception)
+            var json = System.Text.Json.JsonSerializer.Serialize(entries, new System.Text.Json.JsonSerializerOptions
             {
-                AddLogEntry("Failed to export audit log", LogLevel.Error);
-                MessageBox.Show("Export failed. Please check file permissions.", "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+                WriteIndented = true
+            });
+
+            System.IO.File.WriteAllText(path, json);
+            AddLogEntry("Audit log exported", LogLevel.Success);
+            MessageBox.Show("Audit log exported successfully", "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception)
+        {
+            AddLogEntry("Failed to export audit log", LogLevel.Error);
+            MessageBox.Show("Export failed. Please check file permissions.", "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
     
@@ -1129,7 +1145,7 @@ public partial class MainWindow : Window
         try
         {
             _lastScanResult = await _backdoorService.RunFullScanAsync(
-                progress => Dispatcher.Invoke(() => BackdoorScanProgressText.Text = progress));
+                progress => Dispatcher.UIThread.Post(() => BackdoorScanProgressText.Text = progress));
 
             // Display results
             DisplayScanResults(_lastScanResult);
@@ -1227,11 +1243,11 @@ public partial class MainWindow : Window
     {
         return severity switch
         {
-            SeverityLevel.Critical => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D32F2F")),
-            SeverityLevel.High => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F57C00")),
-            SeverityLevel.Medium => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FBC02D")),
-            SeverityLevel.Low => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0078D4")),
-            _ => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#757575"))
+            SeverityLevel.Critical => new SolidColorBrush(Color.Parse("#D32F2F")),
+            SeverityLevel.High => new SolidColorBrush(Color.Parse("#F57C00")),
+            SeverityLevel.Medium => new SolidColorBrush(Color.Parse("#FBC02D")),
+            SeverityLevel.Low => new SolidColorBrush(Color.Parse("#0078D4")),
+            _ => new SolidColorBrush(Color.Parse("#757575"))
         };
     }
 
@@ -1539,7 +1555,7 @@ public partial class MainWindow : Window
                 remediableFindings,
                 (resourceName, current, total) =>
                 {
-                    Dispatcher.Invoke(() =>
+                    Dispatcher.UIThread.Post(() =>
                     {
                         MassRemediateAllProgressText.Text = $"Remediating {resourceName} ({current}/{total})...";
                         MassRemediateAllProgressBar.Value = current;
@@ -1635,7 +1651,7 @@ public partial class MainWindow : Window
             var result = await _riskyAccountService.ScanForRiskyAccountsAsync(
                 (scanned, found) =>
                 {
-                    Dispatcher.Invoke(() =>
+                    Dispatcher.UIThread.Post(() =>
                     {
                         RiskyAccountsScanStatus.Text = $"Scanned {scanned} users, found {found} risky accounts...";
                     });
@@ -1746,7 +1762,7 @@ public partial class MainWindow : Window
                 _authService.CurrentUserId,
                 (current, total) =>
                 {
-                    Dispatcher.Invoke(() =>
+                    Dispatcher.UIThread.Post(() =>
                     {
                         RiskyAccountsScanStatus.Text = $"Remediating {current} of {total}...";
                     });
@@ -1821,7 +1837,7 @@ public partial class MainWindow : Window
                 _authService.CurrentUserId,
                 (current, total) =>
                 {
-                    Dispatcher.Invoke(() =>
+                    Dispatcher.UIThread.Post(() =>
                     {
                         RiskyAccountsScanStatus.Text = $"Remediating critical account {current} of {total}...";
                     });
@@ -1874,7 +1890,7 @@ public partial class MainWindow : Window
             _provisioningService = new AppProvisioningService();
             _provisioningService.OnStatusUpdate += status =>
             {
-                Dispatcher.Invoke(() =>
+                Dispatcher.UIThread.Post(() =>
                 {
                     ProvisioningStatusText.Text = status;
                     AddLogEntry(status, LogLevel.Info);
@@ -1882,7 +1898,7 @@ public partial class MainWindow : Window
             };
             _provisioningService.OnError += error =>
             {
-                Dispatcher.Invoke(() =>
+                Dispatcher.UIThread.Post(() =>
                 {
                     AddLogEntry(error, LogLevel.Error);
                 });
@@ -1935,12 +1951,16 @@ public partial class MainWindow : Window
         }
     }
 
-    private void CopyClientIdButton_Click(object sender, RoutedEventArgs e)
+    private async void CopyClientIdButton_Click(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrEmpty(_provisionedClientId))
         {
-            Clipboard.SetText(_provisionedClientId);
-            AddLogEntry("Client ID copied to clipboard", LogLevel.Info);
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel?.Clipboard != null)
+            {
+                await topLevel.Clipboard.SetTextAsync(_provisionedClientId);
+                AddLogEntry("Client ID copied to clipboard", LogLevel.Info);
+            }
         }
     }
 
@@ -1977,7 +1997,7 @@ public partial class MainWindow : Window
 
     private void UpdateStatus(string message)
     {
-        Dispatcher.Invoke(() => StatusText.Text = message);
+        Dispatcher.UIThread.Post(() => StatusText.Text = message);
     }
 }
 
