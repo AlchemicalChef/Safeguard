@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace EntraTokenRevocationGUI.Models;
+namespace Safeguard.Models;
 
 /// <summary>
 /// Represents a potential backdoor finding in the Entra ID tenant
@@ -18,10 +18,13 @@ public class BackdoorFinding
     public string Description { get; set; } = string.Empty;
     public string? AffectedResource { get; set; }
     public string? ResourceId { get; set; }
+    public string? ResourceName { get; set; }
+    public string? TechnicalDetails { get; set; }
+    public bool CanRemediate { get; set; }
     public DateTime DetectedAt { get; set; } = DateTime.UtcNow;
     public Dictionary<string, string> Details { get; set; } = new();
     public string Recommendation { get; set; } = string.Empty;
-    public string MitreAttackTechnique { get; set; } = string.Empty;
+    public string MitreAttackId { get; set; } = string.Empty;
 }
 
 public enum BackdoorType
@@ -61,9 +64,19 @@ public enum BackdoorType
     RefreshTokenReplay,
     PrimaryRefreshTokenTheft,
     
-    FederatedIdentityCredentialBackdoor,   // Suspicious FIC on app registration
-    FederatedIdentityCredentialMisconfigured, // Overly permissive subject/issuer
-    FederatedIdentityCredentialUnknownIssuer  // FIC with unknown external IdP
+    FederatedIdentityCredentialBackdoor,
+    FederatedIdentityCredentialMisconfigured,
+    FederatedIdentityCredentialUnknownIssuer,
+    
+    DelegatedAdminRelationship,
+    LegacyDelegatedAdminPermissions,
+    CrossTenantAccessTrustMfa,
+    CrossTenantAccessTrustDevice,
+    CrossTenantAccessTrustHybridJoin,
+    CrossTenantSyncEnabled,
+    GuestUserWithAdminRole,
+    CertificateBasedAuthNoCrl,
+    PrivilegedGuestUser
 }
 
 /// <summary>
@@ -278,7 +291,7 @@ public class TokenTheftIndicator
     public string? SourceIp { get; set; }
     public string? UserAgent { get; set; }
     public string? Description { get; set; }
-    public string MitreAttackTechnique { get; set; } = string.Empty;
+    public string MitreAttackId { get; set; } = string.Empty;
 }
 
 /// <summary>

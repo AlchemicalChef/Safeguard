@@ -1,4 +1,4 @@
-namespace EntraTokenRevocationGUI.Models;
+namespace Safeguard.Models;
 
 public class AppConfiguration
 {

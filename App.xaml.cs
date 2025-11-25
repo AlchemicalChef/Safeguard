@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace EntraTokenRevocationGUI;
+namespace Safeguard;
 
 public partial class App : Application
 {

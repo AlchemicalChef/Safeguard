@@ -11,14 +11,14 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
-using EntraTokenRevocationGUI.Models;
-using EntraTokenRevocationGUI.Services;
+using Safeguard.Models;
+using Safeguard.Services;
 using Microsoft.Graph.Models;
 using Microsoft.Win32;
 using System.Security;
 using System.Text.RegularExpressions;
 
-namespace EntraTokenRevocationGUI;
+namespace Safeguard;
 
 public partial class MainWindow : Window
 {

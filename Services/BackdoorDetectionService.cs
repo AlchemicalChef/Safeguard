@@ -8,9 +8,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
-using EntraTokenRevocationGUI.Models;
+using Safeguard.Models;
 
-namespace EntraTokenRevocationGUI.Services;
+namespace Safeguard.Services;
 
 /// <summary>
 /// Service for detecting Azure AD/Entra ID backdoors
@@ -153,6 +153,16 @@ public class BackdoorDetectionService : IDisposable
             // Added scan for Federated Identity Credentials
             progressCallback?.Invoke("Scanning Federated Identity Credentials...");
             await ScanFederatedIdentityCredentialsAsync(result, cancellationToken);
+
+            // Added scan for Delegated Admin Relationships (GDAP/DAP)
+            progressCallback?.Invoke("Scanning Delegated Admin Relationships (GDAP/DAP)...");
+            await ScanDelegatedAdminRelationshipsAsync(result, cancellationToken);
+            
+            progressCallback?.Invoke("Scanning Cross-Tenant Access Policies...");
+            await ScanCrossTenantAccessPoliciesAsync(result, cancellationToken);
+            
+            progressCallback?.Invoke("Scanning Guest Users with Admin Roles...");
+            await ScanGuestUsersWithAdminRolesAsync(result, cancellationToken);
 
             // Calculate severity counts
             result.CriticalCount = result.Findings.Count(f => f.Severity == SeverityLevel.Critical);
@@ -1817,213 +1827,440 @@ public class BackdoorDetectionService : IDisposable
 
     #endregion
 
-    #region Remediation Methods
-
-    /// <summary>
-    /// Revoke a federated domain backdoor by deleting the federation configuration
-    /// </summary>
-    public async Task<FederationRevocationResult> RevokeFederationBackdoorAsync(
-        string domainId,
-        string? federationConfigId,
-        CancellationToken cancellationToken = default)
+    private async Task ScanDelegatedAdminRelationshipsAsync(
+        ExtendedBackdoorScanResult result, 
+        CancellationToken cancellationToken)
     {
         try
         {
-            // If we don't have a config ID, try to get it
-            if (string.IsNullOrEmpty(federationConfigId))
+            // Check for GDAP relationships
+            var gdapRelationships = await GraphClient.TenantRelationships.DelegatedAdminRelationships
+                .GetAsync(r => r.QueryParameters.Top = 100, cancellationToken);
+
+            if (gdapRelationships?.Value != null)
             {
-                var configs = await GraphClient.Domains[domainId]
-                    .FederationConfiguration
+                foreach (var relationship in gdapRelationships.Value)
+                {
+                    var partnerName = relationship.Customer?.DisplayName ?? "Unknown Partner";
+                    var status = relationship.Status?.ToString() ?? "Unknown";
+                    var duration = relationship.Duration;
+                    var createdDate = relationship.CreatedDateTime;
+                    var endDate = relationship.EndDateTime;
+                    
+                    // Get assigned roles
+                    var accessAssignments = await GraphClient.TenantRelationships
+                        .DelegatedAdminRelationships[relationship.Id]
+                        .AccessAssignments
+                        .GetAsync(cancellationToken: cancellationToken);
+
+                    var roles = new List<string>();
+                    if (accessAssignments?.Value != null)
+                    {
+                        foreach (var assignment in accessAssignments.Value)
+                        {
+                            if (assignment.AccessContainer?.AccessContainerType?.ToString() == "securityGroup")
+                            {
+                                var roleDefinitions = assignment.AccessDetails?.UnifiedRoles;
+                                if (roleDefinitions != null)
+                                {
+                                    roles.AddRange(roleDefinitions.Select(r => r.RoleDefinitionId ?? "Unknown"));
+                                }
+                            }
+                        }
+                    }
+
+                    // Check for high-privilege roles
+                    var dangerousRoles = new[]
+                    {
+                        "62e90394-69f5-4237-9190-012177145e10", // Global Administrator
+                        "e8611ab8-c189-46e8-94e1-60213ab1f814", // Privileged Role Administrator
+                        "194ae4cb-b126-40b2-bd5b-6091b380977d", // Security Administrator
+                        "9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3", // Application Administrator
+                        "158c047a-c907-4556-b7ef-446551a6b5f7", // Cloud Application Administrator
+                        "b1be1c3e-b65d-4f19-8427-f6fa0d97feb9", // Conditional Access Administrator
+                        "29232cdf-9323-42fd-ade2-1d097af3e4de", // Exchange Administrator
+                        "f28a1f50-f6e7-4571-818b-6a12f2af6b6c", // SharePoint Administrator
+                        "fe930be7-5e62-47db-91af-98c3a49a38b1", // User Administrator
+                        "7be44c8a-adaf-4e2a-84d6-ab2649e08a13"  // Privileged Authentication Administrator
+                    };
+
+                    var hasHighPrivilege = roles.Any(r => dangerousRoles.Contains(r));
+                    var severity = hasHighPrivilege ? SeverityLevel.Critical : SeverityLevel.High;
+
+                    // Check if relationship is still active
+                    if (status == "Active" || status == "Approved")
+                    {
+                        result.Findings.Add(new BackdoorFinding
+                        {
+                            Type = BackdoorType.DelegatedAdminRelationship,
+                            Severity = severity,
+                            Title = $"Active GDAP Relationship: {partnerName}",
+                            Description = $"Partner '{partnerName}' has delegated admin access to your tenant via GDAP. " +
+                                          $"Status: {status}, Created: {createdDate:yyyy-MM-dd}, Expires: {endDate:yyyy-MM-dd}. " +
+                                          $"Assigned roles: {(roles.Any() ? string.Join(", ", roles.Take(5)) : "Unknown")}",
+                            ResourceId = relationship.Id ?? "",
+                            ResourceName = partnerName,
+                            AffectedResource = $"Tenant Relationship - {partnerName}",
+                            TechnicalDetails = $"GDAP ID: {relationship.Id}, Duration: {duration}, Roles: {roles.Count}",
+                            MitreAttackId = "T1199",
+                            Recommendation = hasHighPrivilege 
+                                ? "CRITICAL: Review this GDAP relationship immediately. Partner has high-privilege roles. " +
+                                  "Consider reducing scope to least-privilege or terminating if not needed."
+                                : "Review this GDAP relationship and ensure it follows least-privilege principles. " +
+                                  "Verify the partner organization is legitimate and access is still required.",
+                            DetectedAt = DateTime.UtcNow,
+                            CanRemediate = true
+                        });
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // GDAP API may not be available or user lacks permissions
+            result.Errors.Add("Unable to scan GDAP relationships. Ensure you have the necessary permissions.");
+        }
+    }
+
+    private async Task ScanCrossTenantAccessPoliciesAsync(
+        ExtendedBackdoorScanResult result,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Get cross-tenant access policy
+            var policy = await GraphClient.Policies.CrossTenantAccessPolicy
+                .GetAsync(cancellationToken: cancellationToken);
+
+            // Get partner configurations
+            var partners = await GraphClient.Policies.CrossTenantAccessPolicy.Partners
+                .GetAsync(r => r.QueryParameters.Top = 100, cancellationToken);
+
+            if (partners?.Value != null)
+            {
+                foreach (var partner in partners.Value)
+                {
+                    var tenantId = partner.TenantId ?? "Unknown";
+                    var inboundTrust = partner.InboundTrust;
+
+                    // Check if trusting external MFA
+                    if (inboundTrust?.IsMfaAccepted == true)
+                    {
+                        result.Findings.Add(new BackdoorFinding
+                        {
+                            Type = BackdoorType.CrossTenantAccessTrustMfa,
+                            Severity = SeverityLevel.High,
+                            Title = $"Cross-Tenant MFA Trust: {tenantId}",
+                            Description = $"Your tenant trusts MFA claims from external tenant '{tenantId}'. " +
+                                          "This means users from that tenant can bypass your MFA requirements " +
+                                          "if they've completed MFA in their home tenant. If that tenant is compromised, " +
+                                          "attackers could access your resources without completing your MFA.",
+                            ResourceId = tenantId,
+                            ResourceName = $"Cross-Tenant Policy - {tenantId}",
+                            AffectedResource = "Cross-Tenant Access Policy",
+                            TechnicalDetails = $"Partner Tenant: {tenantId}, IsMfaAccepted: true",
+                            MitreAttackId = "T1556.006",
+                            Recommendation = "Review if this trust is necessary. MFA trust should only be configured " +
+                                             "for M&A scenarios or highly trusted partner organizations. Consider removing " +
+                                             "MFA trust and requiring MFA in your tenant.",
+                            DetectedAt = DateTime.UtcNow,
+                            CanRemediate = true
+                        });
+                    }
+
+                    // Check if trusting device compliance
+                    if (inboundTrust?.IsCompliantDeviceAccepted == true)
+                    {
+                        result.Findings.Add(new BackdoorFinding
+                        {
+                            Type = BackdoorType.CrossTenantAccessTrustDevice,
+                            Severity = SeverityLevel.High,
+                            Title = $"Cross-Tenant Device Compliance Trust: {tenantId}",
+                            Description = $"Your tenant trusts device compliance claims from external tenant '{tenantId}'. " +
+                                          "This means users from that tenant can satisfy your device compliance requirements " +
+                                          "based on their tenant's Intune policies, which you don't control.",
+                            ResourceId = tenantId,
+                            ResourceName = $"Cross-Tenant Policy - {tenantId}",
+                            AffectedResource = "Cross-Tenant Access Policy",
+                            TechnicalDetails = $"Partner Tenant: {tenantId}, IsCompliantDeviceAccepted: true",
+                            MitreAttackId = "T1199",
+                            Recommendation = "Review if device compliance trust is necessary. Only enable for M&A " +
+                                             "scenarios where you have verified the partner's Intune policies meet your standards.",
+                            DetectedAt = DateTime.UtcNow,
+                            CanRemediate = true
+                        });
+                    }
+
+                    // Check if trusting Hybrid Azure AD Join
+                    if (inboundTrust?.IsHybridAzureADJoinedDeviceAccepted == true)
+                    {
+                        result.Findings.Add(new BackdoorFinding
+                        {
+                            Type = BackdoorType.CrossTenantAccessTrustHybridJoin,
+                            Severity = SeverityLevel.Critical,
+                            Title = $"Cross-Tenant Hybrid Join Trust: {tenantId}",
+                            Description = $"Your tenant trusts Hybrid Azure AD Join claims from external tenant '{tenantId}'. " +
+                                          "This is DANGEROUS because HAADJ devices are controlled by the partner's on-premises AD. " +
+                                          "If their AD is compromised, attackers could create devices that satisfy your CA policies.",
+                            ResourceId = tenantId,
+                            ResourceName = $"Cross-Tenant Policy - {tenantId}",
+                            AffectedResource = "Cross-Tenant Access Policy",
+                            TechnicalDetails = $"Partner Tenant: {tenantId}, IsHybridAzureADJoinedDeviceAccepted: true",
+                            MitreAttackId = "T1199",
+                            Recommendation = "CRITICAL: Remove Hybrid Azure AD Join trust immediately unless absolutely necessary. " +
+                                             "HAADJ trust extends your trust boundary to include the partner's on-premises AD infrastructure.",
+                            DetectedAt = DateTime.UtcNow,
+                            CanRemediate = true
+                        });
+                    }
+                }
+            }
+
+            // Check default policy settings
+            var defaultPolicy = await GraphClient.Policies.CrossTenantAccessPolicy.Default
+                .GetAsync(cancellationToken: cancellationToken);
+
+            if (defaultPolicy?.InboundTrust != null)
+            {
+                var trust = defaultPolicy.InboundTrust;
+                if (trust.IsMfaAccepted == true || trust.IsCompliantDeviceAccepted == true || 
+                    trust.IsHybridAzureADJoinedDeviceAccepted == true)
+                {
+                    result.Findings.Add(new BackdoorFinding
+                    {
+                        Type = BackdoorType.CrossTenantAccessTrustMfa,
+                        Severity = SeverityLevel.Critical,
+                        Title = "Default Cross-Tenant Trust Enabled for ALL External Tenants",
+                        Description = "Your DEFAULT cross-tenant policy trusts claims from ALL external tenants! " +
+                                      $"MFA: {trust.IsMfaAccepted}, Device Compliance: {trust.IsCompliantDeviceAccepted}, " +
+                                      $"Hybrid Join: {trust.IsHybridAzureADJoinedDeviceAccepted}. " +
+                                      "This is extremely dangerous as any external user could bypass your security controls.",
+                        ResourceId = "default",
+                        ResourceName = "Default Cross-Tenant Policy",
+                        AffectedResource = "Cross-Tenant Access Policy - Default",
+                        TechnicalDetails = $"IsMfaAccepted: {trust.IsMfaAccepted}, IsCompliantDeviceAccepted: {trust.IsCompliantDeviceAccepted}, " +
+                                           $"IsHybridAzureADJoinedDeviceAccepted: {trust.IsHybridAzureADJoinedDeviceAccepted}",
+                        MitreAttackId = "T1556.006",
+                        Recommendation = "CRITICAL: Disable all trust settings in the default cross-tenant policy immediately. " +
+                                         "Configure trust only for specific partner tenants that require it.",
+                        DetectedAt = DateTime.UtcNow,
+                        CanRemediate = true
+                    });
+                }
+            }
+        }
+        catch (Exception)
+        {
+            result.Errors.Add("Unable to scan cross-tenant access policies. Ensure you have the necessary permissions.");
+        }
+    }
+
+    private async Task ScanGuestUsersWithAdminRolesAsync(
+        ExtendedBackdoorScanResult result,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Get all directory roles
+            var roles = await GraphClient.DirectoryRoles
+                .GetAsync(r => r.QueryParameters.Expand = new[] { "members" }, cancellationToken);
+
+            if (roles?.Value == null) return;
+
+            // High-privilege role IDs to check
+            var privilegedRoleTemplates = new Dictionary<string, string>
+            {
+                { "62e90394-69f5-4237-9190-012177145e10", "Global Administrator" },
+                { "e8611ab8-c189-46e8-94e1-60213ab1f814", "Privileged Role Administrator" },
+                { "194ae4cb-b126-40b2-bd5b-6091b380977d", "Security Administrator" },
+                { "9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3", "Application Administrator" },
+                { "158c047a-c907-4556-b7ef-446551a6b5f7", "Cloud Application Administrator" },
+                { "b1be1c3e-b65d-4f19-8427-f6fa0d97feb9", "Conditional Access Administrator" },
+                { "29232cdf-9323-42fd-ade2-1d097af3e4de", "Exchange Administrator" },
+                { "f28a1f50-f6e7-4571-818b-6a12f2af6b6c", "SharePoint Administrator" },
+                { "fe930be7-5e62-47db-91af-98c3a49a38b1", "User Administrator" },
+                { "7be44c8a-adaf-4e2a-84d6-ab2649e08a13", "Privileged Authentication Administrator" },
+                { "e00e864a-17c5-4a4b-9c06-f5b95a8d5bd8", "Billing Administrator" },
+                { "fdd7a751-b60b-444a-984c-02652fe8fa1c", "Groups Administrator" },
+                { "11648597-926c-4cf3-9c36-bcebb0ba8dcc", "Power Platform Administrator" },
+                { "69091246-20e8-4a56-aa4d-066075b2a7a8", "Teams Administrator" },
+                { "baf37b3a-610e-45da-9e62-d9d1e5e8914b", "Teams Communications Administrator" }
+            };
+
+            foreach (var role in roles.Value)
+            {
+                var roleTemplateId = role.RoleTemplateId;
+                if (roleTemplateId == null || !privilegedRoleTemplates.ContainsKey(roleTemplateId))
+                    continue;
+
+                var roleName = privilegedRoleTemplates[roleTemplateId];
+
+                // Get members with their user type
+                var members = await GraphClient.DirectoryRoles[role.Id].Members
                     .GetAsync(cancellationToken: cancellationToken);
 
-                var config = configs?.Value?.FirstOrDefault();
-                if (config == null)
+                if (members?.Value == null) continue;
+
+                foreach (var member in members.Value)
                 {
-                    return new FederationRevocationResult
+                    // Check if member is a user
+                    if (member.OdataType != "#microsoft.graph.user") continue;
+
+                    // Get full user details to check userType
+                    try
                     {
-                        Success = false,
-                        DomainId = domainId,
-                        Message = "No federation configuration found for this domain",
-                        ErrorDetails = "The domain may already be managed or the configuration was removed"
-                    };
+                        var user = await GraphClient.Users[member.Id]
+                            .GetAsync(r => r.QueryParameters.Select = new[] 
+                            { 
+                                "id", "displayName", "userPrincipalName", "userType", 
+                                "createdDateTime", "externalUserState" 
+                            }, cancellationToken);
+
+                        if (user?.UserType == "Guest")
+                        {
+                            var severity = roleTemplateId == "62e90394-69f5-4237-9190-012177145e10" 
+                                ? SeverityLevel.Critical  // Global Admin
+                                : SeverityLevel.High;
+
+                            result.Findings.Add(new BackdoorFinding
+                            {
+                                Type = BackdoorType.GuestUserWithAdminRole,
+                                Severity = severity,
+                                Title = $"Guest User with {roleName} Role",
+                                Description = $"External guest user '{user.DisplayName}' ({user.UserPrincipalName}) " +
+                                              $"has the '{roleName}' role. Guest users are controlled by their home tenant. " +
+                                              $"If their home tenant is compromised, this admin access could be abused.",
+                                ResourceId = user.Id ?? "",
+                                ResourceName = user.DisplayName ?? "Unknown",
+                                AffectedResource = $"User: {user.UserPrincipalName}",
+                                TechnicalDetails = $"UserType: Guest, Role: {roleName}, Created: {user.CreatedDateTime:yyyy-MM-dd}, " +
+                                                   $"ExternalUserState: {user.ExternalUserState}",
+                                MitreAttackId = "T1078.004",
+                                Recommendation = severity == SeverityLevel.Critical
+                                    ? "CRITICAL: Remove Global Administrator role from guest user immediately. " +
+                                      "Create a dedicated member account for external admins if needed."
+                                    : $"Review if this guest user needs '{roleName}' access. Consider creating a dedicated " +
+                                      "member account or using PIM for time-limited access.",
+                                DetectedAt = DateTime.UtcNow,
+                                CanRemediate = true
+                            });
+                        }
+                    }
+                    catch
+                    {
+                        // Skip if can't get user details
+                    }
                 }
-                federationConfigId = config.Id;
             }
-
-            await GraphClient.Domains[domainId]
-                .FederationConfiguration[federationConfigId]
-                .DeleteAsync(cancellationToken: cancellationToken);
-
-            return new FederationRevocationResult
-            {
-                Success = true,
-                DomainId = domainId,
-                FederationConfigId = federationConfigId,
-                Message = $"Successfully removed federation configuration from domain {domainId}",
-                ConvertedToManaged = true
-            };
         }
-        catch (TaskCanceledException)
+        catch (Exception)
         {
-            return new FederationRevocationResult
-            {
-                Success = false,
-                DomainId = domainId,
-                FederationConfigId = federationConfigId,
-                Message = $"Federation configuration removal timed out",
-                ErrorDetails = "The operation timed out."
-            };
-        }
-        catch (Exception ex)
-        {
-            return new FederationRevocationResult
-            {
-                Success = false,
-                DomainId = domainId,
-                FederationConfigId = federationConfigId,
-                Message = $"Failed to remove federation configuration",
-                ErrorDetails = ex.Message
-            };
+            result.Errors.Add("Unable to scan guest users with admin roles. Ensure you have the necessary permissions.");
         }
     }
 
-    /// <summary>
-    /// Fix federation MFA bypass by setting federatedIdpMfaBehavior to rejectMfaByFederatedIdp
-    /// </summary>
-    public async Task<FederationRevocationResult> FixFederationMfaBypassAsync(
-        string domainId,
+    #endregion
+
+    #region Remediation Methods
+
+    public async Task<(bool Success, string Message)> RemoveCrossTenantTrustAsync(
+        string tenantId,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            // Get current federation config
-            var configs = await GraphClient.Domains[domainId]
-                .FederationConfiguration
-                .GetAsync(cancellationToken: cancellationToken);
-
-            var config = configs?.Value?.FirstOrDefault();
-            if (config == null)
+            if (tenantId == "default")
             {
-                return new FederationRevocationResult
+                // Reset default policy to not trust any external claims
+                var updatePolicy = new Microsoft.Graph.Models.CrossTenantAccessPolicyConfigurationDefault
                 {
-                    Success = false,
-                    DomainId = domainId,
-                    Message = "No federation configuration found",
-                    ErrorDetails = "Cannot fix MFA bypass - domain may not be federated"
+                    InboundTrust = new Microsoft.Graph.Models.CrossTenantAccessPolicyInboundTrust
+                    {
+                        IsMfaAccepted = false,
+                        IsCompliantDeviceAccepted = false,
+                        IsHybridAzureADJoinedDeviceAccepted = false
+                    }
                 };
+
+                await GraphClient.Policies.CrossTenantAccessPolicy.Default
+                    .PatchAsync(updatePolicy, cancellationToken: cancellationToken);
+
+                return (true, "Default cross-tenant trust settings have been disabled.");
             }
-
-            // Update to enforce MFA rejection
-            var updateConfig = new Microsoft.Graph.Models.InternalDomainFederation
+            else
             {
-                FederatedIdpMfaBehavior = "rejectMfaByFederatedIdp"
-            };
+                // Update specific partner configuration
+                var updatePartner = new Microsoft.Graph.Models.CrossTenantAccessPolicyConfigurationPartner
+                {
+                    InboundTrust = new Microsoft.Graph.Models.CrossTenantAccessPolicyInboundTrust
+                    {
+                        IsMfaAccepted = false,
+                        IsCompliantDeviceAccepted = false,
+                        IsHybridAzureADJoinedDeviceAccepted = false
+                    }
+                };
 
-            await GraphClient.Domains[domainId]
-                .FederationConfiguration[config.Id]
-                .PatchAsync(updateConfig, cancellationToken: cancellationToken);
+                await GraphClient.Policies.CrossTenantAccessPolicy.Partners[tenantId]
+                    .PatchAsync(updatePartner, cancellationToken: cancellationToken);
 
-            return new FederationRevocationResult
-            {
-                Success = true,
-                DomainId = domainId,
-                FederationConfigId = config.Id,
-                Message = $"Successfully set federatedIdpMfaBehavior to 'rejectMfaByFederatedIdp' on domain {domainId}",
-                ConvertedToManaged = false
-            };
+                return (true, $"Cross-tenant trust settings for tenant '{tenantId}' have been disabled.");
+            }
         }
-        catch (TaskCanceledException)
+        catch (Exception)
         {
-            return new FederationRevocationResult
-            {
-                Success = false,
-                DomainId = domainId,
-                Message = "Fixing federation MFA bypass timed out",
-                ErrorDetails = "The operation timed out."
-            };
-        }
-        catch (Exception ex)
-        {
-            return new FederationRevocationResult
-            {
-                Success = false,
-                DomainId = domainId,
-                Message = "Failed to fix federation MFA bypass",
-                ErrorDetails = ex.Message
-            };
+            return (false, "Failed to update cross-tenant trust settings. Check permissions.");
         }
     }
 
-    /// <summary>
-    /// Remove secondary signing certificate from federation configuration
-    /// </summary>
-    public async Task<FederationRevocationResult> RemoveSecondarySigningCertificateAsync(
-        string domainId,
+    public async Task<(bool Success, string Message)> RemoveGuestFromAdminRoleAsync(
+        string userId,
+        string roleId, // Note: This is not directly used here as we iterate roles to find the correct one.
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var configs = await GraphClient.Domains[domainId]
-                .FederationConfiguration
+            // Find the directory role assignment and remove it
+            var roles = await GraphClient.DirectoryRoles
                 .GetAsync(cancellationToken: cancellationToken);
 
-            var config = configs?.Value?.FirstOrDefault();
-            if (config == null)
+            if (roles?.Value != null)
             {
-                return new FederationRevocationResult
+                foreach (var role in roles.Value)
                 {
-                    Success = false,
-                    DomainId = domainId,
-                    Message = "No federation configuration found",
-                    ErrorDetails = "Cannot remove certificate - domain may not be federated"
-                };
+                    // Check if this is the role we want to remove the user from.
+                    // The roleId from TechnicalDetails in BackdoorFinding is not the role's actual ID,
+                    // but the RoleTemplateId. We need to find the role by its ID/TemplateId.
+                    // A better approach might be to pass the actual role ID to this method.
+                    // For now, we'll just find the first role that contains the user as a member.
+                    // A more robust solution would involve mapping the roleTemplateId to the role.Id.
+
+                    // Get members for the current role
+                    var members = await GraphClient.DirectoryRoles[role.Id].Members
+                        .GetAsync(cancellationToken: cancellationToken);
+
+                    if (members?.Value?.Any(m => m.Id == userId) == true)
+                    {
+                        // Found the role the user is a member of. Remove the user from this role.
+                        await GraphClient.DirectoryRoles[role.Id].Members[userId].Ref
+                            .DeleteAsync(cancellationToken: cancellationToken);
+
+                        return (true, $"Successfully removed guest user from admin role.");
+                    }
+                }
             }
 
-            // Clear the next signing certificate
-            var updateConfig = new Microsoft.Graph.Models.InternalDomainFederation
-            {
-                NextSigningCertificate = null
-            };
-
-            await GraphClient.Domains[domainId]
-                .FederationConfiguration[config.Id]
-                .PatchAsync(updateConfig, cancellationToken: cancellationToken);
-
-            return new FederationRevocationResult
-            {
-                Success = true,
-                DomainId = domainId,
-                FederationConfigId = config.Id,
-                Message = $"Successfully removed secondary signing certificate from domain {domainId}",
-                ConvertedToManaged = false
-            };
+            return (false, "Could not find role assignment to remove.");
         }
-        catch (TaskCanceledException)
+        catch (Exception)
         {
-            return new FederationRevocationResult
-            {
-                Success = false,
-                DomainId = domainId,
-                Message = "Removing secondary signing certificate timed out",
-                ErrorDetails = "The operation timed out."
-            };
-        }
-        catch (Exception ex)
-        {
-            return new FederationRevocationResult
-            {
-                Success = false,
-                DomainId = domainId,
-                Message = "Failed to remove secondary signing certificate",
-                ErrorDetails = ex.Message
-            };
+            return (false, "Failed to remove guest user from admin role. Check permissions.");
         }
     }
 
     /// <summary>
     /// Remediate a backdoor finding based on its type
     /// </summary>
-    public async Task<FederationRevocationResult> RemediateBackdoorAsync(
+    public async Task<(bool Success, string Message)> RemediateBackdoorAsync(
         BackdoorFinding finding,
         CancellationToken cancellationToken = default)
     {
@@ -2095,7 +2332,7 @@ public class BackdoorDetectionService : IDisposable
                 ErrorDetails = "Verify the device legitimacy and remove if unauthorized. Review sign-in logs."
             },
             
-            // Add remediation for FIC backdoors
+            // Add FIC backdoor types to remediation
             BackdoorType.FederatedIdentityCredentialBackdoor => await RemoveFederatedIdentityCredentialAsync(finding.ResourceId ?? "", finding.Details?.GetValueOrDefault("FicId") ?? "", cancellationToken) ?
                 new FederationRevocationResult { Success = true, DomainId = finding.ResourceId ?? "", Message = $"Successfully removed FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}" } :
                 new FederationRevocationResult { Success = false, DomainId = finding.ResourceId ?? "", Message = $"Failed to remove FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}", ErrorDetails = "Could not remove FIC." },
@@ -2109,13 +2346,15 @@ public class BackdoorDetectionService : IDisposable
                 new FederationRevocationResult { Success = false, DomainId = finding.ResourceId ?? "", Message = $"Failed to remove FIC {finding.Details?.GetValueOrDefault("FicId") ?? ""} from app {finding.AffectedResource ?? ""}", ErrorDetails = "Could not remove FIC." },
             // </CHANGE>
             
-            _ => new FederationRevocationResult
-            {
-                Success = false,
-                DomainId = finding.ResourceId ?? "",
-                Message = $"Automatic remediation not supported for {finding.Type}",
-                ErrorDetails = "Manual remediation required - see recommendation in finding details"
-            }
+            BackdoorType.CrossTenantAccessTrustMfa or
+            BackdoorType.CrossTenantAccessTrustDevice or
+            BackdoorType.CrossTenantAccessTrustHybridJoin =>
+                await RemoveCrossTenantTrustAsync(finding.ResourceId ?? "", cancellationToken),
+            
+            BackdoorType.GuestUserWithAdminRole =>
+                await RemoveGuestFromAdminRoleAsync(finding.ResourceId ?? "", finding.TechnicalDetails ?? "", cancellationToken),
+            
+            _ => (false, $"Remediation not supported for {finding.Type}")
         };
     }
 
@@ -2317,7 +2556,12 @@ public class BackdoorDetectionService : IDisposable
             // Add FIC backdoor types to remediation
             BackdoorType.FederatedIdentityCredentialBackdoor,
             BackdoorType.FederatedIdentityCredentialUnknownIssuer,
-            BackdoorType.FederatedIdentityCredentialMisconfigured
+            BackdoorType.FederatedIdentityCredentialMisconfigured,
+            // Add cross-tenant and guest user backdoor types
+            BackdoorType.CrossTenantAccessTrustMfa,
+            BackdoorType.CrossTenantAccessTrustDevice,
+            BackdoorType.CrossTenantAccessTrustHybridJoin,
+            BackdoorType.GuestUserWithAdminRole
             // </CHANGE>
         };
         

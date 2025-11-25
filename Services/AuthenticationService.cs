@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Graph;
 using Microsoft.Identity.Client;
-using EntraTokenRevocationGUI.Models;
+using Safeguard.Models;
 
-namespace EntraTokenRevocationGUI.Services;
+namespace Safeguard.Services;
 
 public class AuthenticationService
 {

@@ -6,9 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
-using EntraTokenRevocationGUI.Models;
+using Safeguard.Models;
 
-namespace EntraTokenRevocationGUI.Services;
+namespace Safeguard.Services;
 
 public class TokenRevocationService
 {

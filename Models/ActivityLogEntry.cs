@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Media;
 
-namespace EntraTokenRevocationGUI.Models;
+namespace Safeguard.Models;
 
 public enum LogLevel
 {

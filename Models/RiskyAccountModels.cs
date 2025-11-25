@@ -1,8 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace EntraTokenRevocationGUI.Models;
+namespace Safeguard.Models;
 
 /// <summary>
 /// Represents a user account with risky password configuration

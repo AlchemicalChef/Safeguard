@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using EntraTokenRevocationGUI.Models;
+using Safeguard.Models;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 
-namespace EntraTokenRevocationGUI.Services;
+namespace Safeguard.Services;
 
 /// <summary>
 /// Service for detecting risky user accounts based on password configuration

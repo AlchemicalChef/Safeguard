@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace EntraTokenRevocationGUI.Models;
+namespace Safeguard.Models;
 
 public class RevocationResult
 {
@@ -107,6 +107,6 @@ public class FindingViewModel
     public string? AffectedResource { get; set; }
     public string? ResourceId { get; set; }
     public string Recommendation { get; set; } = string.Empty;
-    public string MitreAttackTechnique { get; set; } = string.Empty;
+    public string MitreAttackId { get; set; } = string.Empty;
     public Dictionary<string, string> Details { get; set; } = new();
 }
