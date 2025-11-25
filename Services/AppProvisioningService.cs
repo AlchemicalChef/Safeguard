@@ -245,15 +245,15 @@ public class AppProvisioningService
             OnError?.Invoke($"Interactive authentication failed: {ex.Message}");
             OnStatusUpdate?.Invoke("Falling back to device code authentication (alternate client)...");
 
-            var deviceCodeCredential = new DeviceCodeCredential(options =>
+            var deviceCodeCredential = new DeviceCodeCredential(new DeviceCodeCredentialOptions
             {
-                options.TenantId = tenantId == "common" ? null : tenantId;
-                options.ClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"; // Azure CLI public client
-                options.DeviceCodeCallback = (code, _) =>
+                TenantId = tenantId == "common" ? null : tenantId,
+                ClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46", // Azure CLI public client
+                DeviceCodeCallback = (code, _) =>
                 {
                     OnStatusUpdate?.Invoke($"To sign in, use the code {code.UserCode} at {code.VerificationUri}");
                     return Task.CompletedTask;
-                };
+                }
             });
 
             return await Task.FromResult(new GraphServiceClient(deviceCodeCredential, scopes));
