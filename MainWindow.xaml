@@ -125,7 +125,7 @@
                             Visibility="Collapsed" Click="SignOutButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
                             Foreground="White" BorderBrush="White"/>
-                </Grid>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -563,7 +563,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
-                                        </Grid.Definition>
+                                        </Grid.ColumnDefinitions>
                                         <TextBox x:Name="SingleUserInput" Grid.Column="0"
                                                  ToolTip="Enter User Principal Name (email) or Object ID"/>
                                         <Button Grid.Column="1" Content="Look Up"
