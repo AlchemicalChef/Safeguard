@@ -169,6 +169,8 @@ public class BackdoorScanResult
     public DateTime ScanEndTime { get; set; }
     public TimeSpan Duration => ScanEndTime - ScanStartTime;
     
+    public TimeSpan ScanDuration => Duration;
+    
     public int TotalFindingsCount => Findings.Count;
     public int CriticalCount { get; set; }
     public int HighCount { get; set; }
@@ -604,11 +606,14 @@ public class AppSecurityAnalysis
     public SeverityLevel OverallRisk { get; set; }
 }
 
+/// <summary>
+/// Unified SeverityLevel enum - removed duplicate, using consistent values
+/// </summary>
 public enum SeverityLevel
 {
-    Critical,
-    High,
-    Medium,
+    Info,
     Low,
-    Informational
+    Medium,
+    High,
+    Critical
 }

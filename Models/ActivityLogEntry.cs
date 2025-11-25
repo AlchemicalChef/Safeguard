@@ -1,5 +1,5 @@
 using System;
-using System.Windows.Media;
+using Avalonia.Media;
 
 namespace Safeguard.Models;
 
@@ -16,5 +16,5 @@ public class ActivityLogEntry
     public DateTime Timestamp { get; set; }
     public string Message { get; set; } = string.Empty;
     public LogLevel Level { get; set; }
-    public SolidColorBrush StatusColor { get; set; } = Brushes.Gray;
+    public ISolidColorBrush LevelColor { get; set; } = Brushes.Gray;
 }

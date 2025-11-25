@@ -203,6 +203,96 @@ public class BackdoorDetectionService : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Run a backdoor detection scan with configurable options
+    /// </summary>
+    public async Task<ExtendedBackdoorScanResult> ScanForBackdoorsAsync(
+        BackdoorScanOptions options,
+        Action<string>? progressCallback = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new ExtendedBackdoorScanResult
+        {
+            ScanStartTime = DateTime.UtcNow
+        };
+
+        try
+        {
+            // Run scans based on options
+            if (options.ScanSyncConfiguration)
+            {
+                progressCallback?.Invoke("Scanning Entra Connect Sync configuration...");
+                await ScanEntraConnectSyncAsync(result, cancellationToken);
+                await ScanCloudSyncAgentsAsync(result, cancellationToken);
+            }
+
+            if (options.ScanFederatedDomains)
+            {
+                progressCallback?.Invoke("Scanning domains for federation backdoors...");
+                await ScanDomainsEnhancedAsync(result, cancellationToken);
+            }
+
+            if (options.ScanServicePrincipals)
+            {
+                progressCallback?.Invoke("Scanning service principals...");
+                await ScanServicePrincipalsAsync(result, cancellationToken);
+            }
+
+            if (options.ScanOAuthGrants)
+            {
+                progressCallback?.Invoke("Scanning OAuth2 permission grants...");
+                await ScanOAuthGrantsAsync(result, cancellationToken);
+            }
+
+            if (options.ScanPTAAgents)
+            {
+                progressCallback?.Invoke("Scanning for PTA agents...");
+                await ScanPTAAgentsAsync(result, cancellationToken);
+            }
+
+            if (options.ScanAppCredentials)
+            {
+                progressCallback?.Invoke("Scanning app registrations...");
+                await ScanAppRegistrationsAsync(result, cancellationToken);
+            }
+
+            if (options.ScanFederatedIdentityCredentials)
+            {
+                progressCallback?.Invoke("Scanning federated identity credentials...");
+                await ScanFederatedIdentityCredentialsAsync(result, cancellationToken);
+            }
+
+            if (options.ScanCrossTenantAccess)
+            {
+                progressCallback?.Invoke("Scanning cross-tenant access settings...");
+                await ScanDelegatedAdminRelationshipsAsync(result, cancellationToken); // Renamed for consistency
+                await ScanCrossTenantAccessPoliciesAsync(result, cancellationToken); // Renamed for consistency
+            }
+
+            if (options.ScanGuestAdmins)
+            {
+                progressCallback?.Invoke("Scanning for guest users with admin roles...");
+                await ScanGuestUsersWithAdminRolesAsync(result, cancellationToken); // Renamed for consistency
+            }
+
+            // Calculate severity counts
+            result.CriticalCount = result.Findings.Count(f => f.Severity == SeverityLevel.Critical);
+            result.HighCount = result.Findings.Count(f => f.Severity == SeverityLevel.High);
+            result.MediumCount = result.Findings.Count(f => f.Severity == SeverityLevel.Medium);
+            result.LowCount = result.Findings.Count(f => f.Severity == SeverityLevel.Low);
+        }
+        catch (Exception ex)
+        {
+            result.Errors.Add($"Scan error: {ex.Message}");
+        }
+        finally
+        {
+            result.ScanEndTime = DateTime.UtcNow;
+        }
+
+        return result;
+    }
+
     #region Entra Connect Sync Scanning (AADInternals)
 
     /// <summary>
@@ -1827,6 +1917,7 @@ public class BackdoorDetectionService : IDisposable
 
     #endregion
 
+    // Renamed methods for consistency with new wrapper method
     private async Task ScanDelegatedAdminRelationshipsAsync(
         ExtendedBackdoorScanResult result, 
         CancellationToken cancellationToken)
@@ -1922,6 +2013,7 @@ public class BackdoorDetectionService : IDisposable
         }
     }
 
+    // Renamed method for consistency with new wrapper method
     private async Task ScanCrossTenantAccessPoliciesAsync(
         ExtendedBackdoorScanResult result,
         CancellationToken cancellationToken)
@@ -2055,6 +2147,7 @@ public class BackdoorDetectionService : IDisposable
         }
     }
 
+    // Renamed method for consistency with new wrapper method
     private async Task ScanGuestUsersWithAdminRolesAsync(
         ExtendedBackdoorScanResult result,
         CancellationToken cancellationToken)
