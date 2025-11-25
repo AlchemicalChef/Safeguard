@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.InteropServices;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
@@ -81,10 +80,8 @@ public class AuthenticationService
                 password.MakeReadOnly();
             }
 
-            var passwordString = ConvertToUnsecureString(password);
-
             var msalResult = await _publicClientApp
-                .AcquireTokenByUsernamePassword(RequiredScopes, username, passwordString)
+                .AcquireTokenByUsernamePassword(RequiredScopes, username, password)
                 .ExecuteAsync(cancellationToken);
 
             if (msalResult == null || string.IsNullOrEmpty(msalResult.AccessToken))
@@ -225,27 +222,6 @@ public class AuthenticationService
         _currentUserPrincipalName = null;
     }
 
-    private static string ConvertToUnsecureString(SecureString secureString)
-    {
-        if (secureString == null)
-        {
-            throw new ArgumentNullException(nameof(secureString));
-        }
-
-        var unmanagedString = IntPtr.Zero;
-        try
-        {
-            unmanagedString = Marshal.SecureStringToGlobalAllocUnicode(secureString);
-            return Marshal.PtrToStringUni(unmanagedString) ?? string.Empty;
-        }
-        finally
-        {
-            if (unmanagedString != IntPtr.Zero)
-            {
-                Marshal.ZeroFreeGlobalAllocUnicode(unmanagedString);
-            }
-        }
-    }
 }
 
 internal class RefreshingTokenCredential : TokenCredential
