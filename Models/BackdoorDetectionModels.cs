@@ -25,6 +25,7 @@ public class BackdoorFinding
     public Dictionary<string, string> Details { get; set; } = new();
     public string Recommendation { get; set; } = string.Empty;
     public string MitreAttackId { get; set; } = string.Empty;
+    public string MitreAttackTechnique { get; set; } = string.Empty;
 }
 
 public enum BackdoorType
