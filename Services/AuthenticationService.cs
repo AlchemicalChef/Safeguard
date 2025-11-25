@@ -1,30 +1,23 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure.Identity;
+using Azure.Core;
 using Microsoft.Graph;
 using Microsoft.Identity.Client;
 using EntraTokenRevocationGUI.Models;
 
 namespace EntraTokenRevocationGUI.Services;
 
-public enum AuthenticationMethod
-{
-    DeviceCode,
-    UsernamePassword
-}
-
 public class AuthenticationService
 {
     private readonly AppConfiguration _config;
-    private readonly Action<string, string>? _deviceCodeCallback;
     private GraphServiceClient? _graphClient;
-    private DeviceCodeCredential? _deviceCodeCredential;
     private IPublicClientApplication? _publicClientApp;
     private string? _currentUserId;
     private string? _currentUserPrincipalName;
-    private AuthenticationMethod _authMethod;
+    private IAccount? _cachedAccount;
 
     private static readonly string[] RequiredScopes = new[]
     {
@@ -36,10 +29,11 @@ public class AuthenticationService
         "User.Read"
     };
 
-    public AuthenticationService(AppConfiguration config, Action<string, string>? deviceCodeCallback = null)
+    public event Action<DateTimeOffset>? OnTokenRefreshed;
+
+    public AuthenticationService(AppConfiguration config)
     {
         _config = config ?? throw new ArgumentNullException(nameof(config));
-        _deviceCodeCallback = deviceCodeCallback;
     }
 
     public GraphServiceClient GraphClient => _graphClient 
@@ -47,85 +41,14 @@ public class AuthenticationService
 
     public string? CurrentUserId => _currentUserId;
     public string? CurrentUserPrincipalName => _currentUserPrincipalName;
-    public AuthenticationMethod CurrentAuthMethod => _authMethod;
 
-    /// <summary>
-    /// Authenticate using Device Code Flow (recommended)
-    /// </summary>
-    public async Task<AuthenticationResult> AuthenticateAsync(CancellationToken cancellationToken = default)
-    {
-        _authMethod = AuthenticationMethod.DeviceCode;
-        
-        try
-        {
-            var deviceCodeCredentialOptions = new DeviceCodeCredentialOptions
-            {
-                AuthorityHost = AzureAuthorityHosts.AzurePublicCloud,
-                ClientId = _config.AzureAd.ClientId,
-                TenantId = _config.AzureAd.TenantId,
-                DeviceCodeCallback = (deviceCodeInfo, cancellation) =>
-                {
-                    var userCode = deviceCodeInfo.UserCode;
-                    _deviceCodeCallback?.Invoke(deviceCodeInfo.Message, userCode);
-                    return Task.CompletedTask;
-                }
-            };
-
-            _deviceCodeCredential = new DeviceCodeCredential(deviceCodeCredentialOptions);
-            _graphClient = new GraphServiceClient(_deviceCodeCredential, RequiredScopes);
-
-            var me = await _graphClient.Me.GetAsync(cancellationToken: cancellationToken);
-
-            if (me == null)
-            {
-                throw new InvalidOperationException("Failed to retrieve current user information");
-            }
-
-            _currentUserId = me.Id;
-            _currentUserPrincipalName = me.UserPrincipalName;
-
-            return new AuthenticationResult
-            {
-                Success = true,
-                UserId = _currentUserId,
-                UserPrincipalName = _currentUserPrincipalName,
-                DisplayName = me.DisplayName,
-                AuthMethod = "Device Code Flow"
-            };
-        }
-        catch (AuthenticationFailedException ex)
-        {
-            return new AuthenticationResult
-            {
-                Success = false,
-                ErrorMessage = $"Authentication failed: {ex.Message}"
-            };
-        }
-        catch (Exception ex)
-        {
-            return new AuthenticationResult
-            {
-                Success = false,
-                ErrorMessage = $"Unexpected error: {ex.Message}"
-            };
-        }
-    }
-
-    /// <summary>
-    /// Authenticate using Username and Password (ROPC flow)
-    /// WARNING: This method is less secure and does not work with MFA-enabled accounts.
-    /// Only use in emergency incident response scenarios where MFA may be compromised.
-    /// </summary>
-    public async Task<AuthenticationResult> AuthenticateWithCredentialsAsync(
+    public async Task<AuthenticationResult> AuthenticateAsync(
         string username, 
-        string password,
+        SecureString password,
         CancellationToken cancellationToken = default)
     {
-        _authMethod = AuthenticationMethod.UsernamePassword;
-        
         try
         {
-            // Validate inputs
             if (string.IsNullOrWhiteSpace(username))
             {
                 return new AuthenticationResult
@@ -135,7 +58,7 @@ public class AuthenticationService
                 };
             }
 
-            if (string.IsNullOrWhiteSpace(password))
+            if (password == null || password.Length == 0)
             {
                 return new AuthenticationResult
                 {
@@ -144,7 +67,6 @@ public class AuthenticationService
                 };
             }
 
-            // Build the public client application for ROPC
             var authority = $"https://login.microsoftonline.com/{_config.AzureAd.TenantId}";
             
             _publicClientApp = PublicClientApplicationBuilder
@@ -153,17 +75,13 @@ public class AuthenticationService
                 .WithDefaultRedirectUri()
                 .Build();
 
-            // Convert password to SecureString for security
-            var securePassword = new SecureString();
-            foreach (char c in password)
+            if (!password.IsReadOnly())
             {
-                securePassword.AppendChar(c);
+                password.MakeReadOnly();
             }
-            securePassword.MakeReadOnly();
 
-            // Attempt to acquire token using username/password
             var msalResult = await _publicClientApp
-                .AcquireTokenByUsernamePassword(RequiredScopes, username, securePassword)
+                .AcquireTokenByUsernamePassword(RequiredScopes, username, password)
                 .ExecuteAsync(cancellationToken);
 
             if (msalResult == null || string.IsNullOrEmpty(msalResult.AccessToken))
@@ -175,11 +93,16 @@ public class AuthenticationService
                 };
             }
 
-            // Create a credential provider that uses the acquired token
-            var tokenCredential = new StaticTokenCredential(msalResult.AccessToken, msalResult.ExpiresOn);
+            _cachedAccount = msalResult.Account;
+
+            var tokenCredential = new RefreshingTokenCredential(
+                _publicClientApp, 
+                _cachedAccount, 
+                RequiredScopes,
+                (expiresOn) => OnTokenRefreshed?.Invoke(expiresOn));
+            
             _graphClient = new GraphServiceClient(tokenCredential, RequiredScopes);
 
-            // Get current user info
             var me = await _graphClient.Me.GetAsync(cancellationToken: cancellationToken);
 
             if (me == null)
@@ -196,16 +119,16 @@ public class AuthenticationService
                 UserId = _currentUserId,
                 UserPrincipalName = _currentUserPrincipalName,
                 DisplayName = me.DisplayName,
-                AuthMethod = "Username/Password (ROPC)"
+                AuthMethod = "Credential Authentication",
+                TokenExpiresOn = msalResult.ExpiresOn
             };
         }
-        catch (MsalUiRequiredException ex)
+        catch (MsalUiRequiredException)
         {
-            // This happens when MFA is required or consent is needed
             return new AuthenticationResult
             {
                 Success = false,
-                ErrorMessage = $"Interactive authentication required (MFA may be enabled): {ex.Message}\n\nPlease use Device Code Flow instead."
+                ErrorMessage = "Interactive authentication required. This account may have MFA enabled or requires consent."
             };
         }
         catch (MsalServiceException ex) when (ex.ErrorCode == "invalid_grant")
@@ -213,7 +136,7 @@ public class AuthenticationService
             return new AuthenticationResult
             {
                 Success = false,
-                ErrorMessage = "Invalid username or password. Please verify your credentials."
+                ErrorMessage = "Invalid username or password."
             };
         }
         catch (MsalServiceException ex) when (ex.ErrorCode == "interaction_required")
@@ -221,55 +144,61 @@ public class AuthenticationService
             return new AuthenticationResult
             {
                 Success = false,
-                ErrorMessage = "This account requires interactive sign-in (MFA or Conditional Access policy). Please use Device Code Flow."
+                ErrorMessage = "This account requires interactive sign-in due to MFA or Conditional Access policy."
             };
         }
-        catch (MsalClientException ex)
+        catch (MsalServiceException ex) when (ex.ErrorCode == "invalid_client")
         {
             return new AuthenticationResult
             {
                 Success = false,
-                ErrorMessage = $"Client error: {ex.Message}"
+                ErrorMessage = "Invalid Client ID or the application is not configured for public client flows."
             };
         }
-        catch (Exception ex)
+        catch (MsalClientException ex) when (ex.ErrorCode == "unknown_user_type")
         {
             return new AuthenticationResult
             {
                 Success = false,
-                ErrorMessage = $"Authentication failed: {ex.Message}"
+                ErrorMessage = "Unknown user type. Ensure the username is a valid organizational account."
+            };
+        }
+        catch (MsalClientException)
+        {
+            return new AuthenticationResult
+            {
+                Success = false,
+                ErrorMessage = "Authentication client error. Please verify your Client ID."
+            };
+        }
+        catch (Exception)
+        {
+            return new AuthenticationResult
+            {
+                Success = false,
+                ErrorMessage = "Authentication failed. Please verify your credentials and network connection."
             };
         }
     }
 
-    /// <summary>
-    /// Get an access token for direct API calls (e.g., beta endpoints)
-    /// </summary>
     public async Task<string?> GetAccessTokenAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            if (_authMethod == AuthenticationMethod.DeviceCode && _deviceCodeCredential != null)
+            if (_publicClientApp != null && _cachedAccount != null)
             {
-                var tokenRequestContext = new Azure.Core.TokenRequestContext(
-                    new[] { "https://graph.microsoft.com/.default" });
-                var accessToken = await _deviceCodeCredential.GetTokenAsync(tokenRequestContext, cancellationToken);
-                return accessToken.Token;
-            }
-            else if (_authMethod == AuthenticationMethod.UsernamePassword && _publicClientApp != null)
-            {
-                var accounts = await _publicClientApp.GetAccountsAsync();
-                var account = accounts.FirstOrDefault();
-                
-                if (account != null)
-                {
-                    var result = await _publicClientApp
-                        .AcquireTokenSilent(RequiredScopes, account)
-                        .ExecuteAsync(cancellationToken);
-                    return result.AccessToken;
-                }
+                var result = await _publicClientApp
+                    .AcquireTokenSilent(RequiredScopes, _cachedAccount)
+                    .ExecuteAsync(cancellationToken);
+                    
+                OnTokenRefreshed?.Invoke(result.ExpiresOn);
+                return result.AccessToken;
             }
             
+            return null;
+        }
+        catch (MsalUiRequiredException)
+        {
             return null;
         }
         catch
@@ -278,37 +207,86 @@ public class AuthenticationService
         }
     }
 
+    public async Task<bool> IsTokenValidAsync(CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(cancellationToken);
+        return !string.IsNullOrEmpty(token);
+    }
+
     public void SignOut()
     {
         _graphClient = null;
-        _deviceCodeCredential = null;
         _publicClientApp = null;
+        _cachedAccount = null;
         _currentUserId = null;
         _currentUserPrincipalName = null;
     }
 }
 
-/// <summary>
-/// Simple token credential that uses a pre-acquired access token
-/// </summary>
-internal class StaticTokenCredential : Azure.Core.TokenCredential
+internal class RefreshingTokenCredential : TokenCredential
 {
-    private readonly string _accessToken;
-    private readonly DateTimeOffset _expiresOn;
+    private readonly IPublicClientApplication _publicClientApp;
+    private readonly IAccount _account;
+    private readonly string[] _scopes;
+    private readonly Action<DateTimeOffset>? _onRefreshed;
+    
+    private string? _cachedToken;
+    private DateTimeOffset _tokenExpiry = DateTimeOffset.MinValue;
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    
+    private static readonly TimeSpan RefreshBuffer = TimeSpan.FromMinutes(5);
 
-    public StaticTokenCredential(string accessToken, DateTimeOffset expiresOn)
+    public RefreshingTokenCredential(
+        IPublicClientApplication publicClientApp, 
+        IAccount account, 
+        string[] scopes,
+        Action<DateTimeOffset>? onRefreshed = null)
     {
-        _accessToken = accessToken;
-        _expiresOn = expiresOn;
+        _publicClientApp = publicClientApp;
+        _account = account;
+        _scopes = scopes;
+        _onRefreshed = onRefreshed;
     }
 
-    public override Azure.Core.AccessToken GetToken(Azure.Core.TokenRequestContext requestContext, CancellationToken cancellationToken)
+    public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
     {
-        return new Azure.Core.AccessToken(_accessToken, _expiresOn);
+        return GetTokenAsync(requestContext, cancellationToken).AsTask().GetAwaiter().GetResult();
     }
 
-    public override ValueTask<Azure.Core.AccessToken> GetTokenAsync(Azure.Core.TokenRequestContext requestContext, CancellationToken cancellationToken)
+    public override async ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
     {
-        return new ValueTask<Azure.Core.AccessToken>(new Azure.Core.AccessToken(_accessToken, _expiresOn));
+        if (!string.IsNullOrEmpty(_cachedToken) && DateTimeOffset.UtcNow.Add(RefreshBuffer) < _tokenExpiry)
+        {
+            return new AccessToken(_cachedToken, _tokenExpiry);
+        }
+
+        await _refreshLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (!string.IsNullOrEmpty(_cachedToken) && DateTimeOffset.UtcNow.Add(RefreshBuffer) < _tokenExpiry)
+            {
+                return new AccessToken(_cachedToken, _tokenExpiry);
+            }
+
+            var result = await _publicClientApp
+                .AcquireTokenSilent(_scopes, _account)
+                .ExecuteAsync(cancellationToken);
+
+            _cachedToken = result.AccessToken;
+            _tokenExpiry = result.ExpiresOn;
+            
+            _onRefreshed?.Invoke(_tokenExpiry);
+
+            return new AccessToken(_cachedToken, _tokenExpiry);
+        }
+        catch (MsalUiRequiredException)
+        {
+            throw new InvalidOperationException(
+                "Session expired. Please sign out and sign in again to continue.");
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
     }
 }
