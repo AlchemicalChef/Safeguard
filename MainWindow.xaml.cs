@@ -1,15 +1,22 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Microsoft.Graph.Models;
-using Microsoft.Win32;
 using EntraTokenRevocationGUI.Models;
 using EntraTokenRevocationGUI.Services;
+using Microsoft.Graph.Models;
+using Microsoft.Win32;
+using System.Security;
+using System.Text.RegularExpressions;
 
 namespace EntraTokenRevocationGUI;
 
@@ -18,15 +25,16 @@ public partial class MainWindow : Window
     private AuthenticationService? _authService;
     private TokenRevocationService? _revocationService;
     private BackdoorDetectionService? _backdoorService;
+    private RiskyAccountService? _riskyAccountService;
     private CancellationTokenSource? _cancellationTokenSource;
     private User? _selectedUserForRevocation;
-    private string? _currentDeviceCode;
     private string? _currentClientId;
 
     private readonly ObservableCollection<ActivityLogEntry> _activityLog = new();
     private readonly ObservableCollection<UserViewModel> _users = new();
     private readonly ObservableCollection<EnterpriseAppViewModel> _enterpriseApps = new();
     private readonly ObservableCollection<FindingViewModel> _findings = new();
+    private readonly ObservableCollection<RiskyAccountViewModel> _riskyAccounts = new();
     private BackdoorScanResult? _lastScanResult;
     
     private FindingViewModel? _selectedFinding;
@@ -42,6 +50,7 @@ public partial class MainWindow : Window
         UsersDataGrid.ItemsSource = _users;
         EnterpriseAppsDataGrid.ItemsSource = _enterpriseApps;
         FindingsListView.ItemsSource = _findings;
+        RiskyAccountsListView.ItemsSource = _riskyAccounts;
         
         MassRevocationConfirmation.Checked += (s, e) => MassRevokeButton.IsEnabled = true;
         MassRevocationConfirmation.Unchecked += (s, e) => MassRevokeButton.IsEnabled = false;
@@ -115,26 +124,23 @@ public partial class MainWindow : Window
 
     #region Authentication
 
-    private void AuthMethodRadio_Changed(object sender, RoutedEventArgs e)
+    private static SecureString GetSecurePassword(PasswordBox passwordBox)
     {
-        if (CredentialsPanel == null) return;
-        
-        if (CredentialsRadio.IsChecked == true)
+        var securePassword = new SecureString();
+        foreach (char c in passwordBox.Password)
         {
-            CredentialsPanel.Visibility = Visibility.Visible;
-            ConnectButton.Content = "Connect with Credentials";
+            securePassword.AppendChar(c);
         }
-        else
-        {
-            CredentialsPanel.Visibility = Visibility.Collapsed;
-            ConnectButton.Content = "Connect with Device Code";
-        }
+        return securePassword;
     }
 
     private async void ConnectButton_Click(object sender, RoutedEventArgs e)
     {
         var tenantId = TenantIdInput.Text.Trim();
         var clientId = ClientIdInput.Text.Trim();
+        var username = UsernameInput.Text.Trim();
+        
+        using var securePassword = GetSecurePassword(PasswordInput);
 
         if (string.IsNullOrWhiteSpace(clientId))
         {
@@ -142,50 +148,23 @@ public partial class MainWindow : Window
             return;
         }
 
-        var useCredentials = CredentialsRadio.IsChecked == true;
-        string? username = null;
-        string? password = null;
-
-        if (useCredentials)
+        if (string.IsNullOrWhiteSpace(username))
         {
-            username = UsernameInput.Text.Trim();
-            password = PasswordInput.Password;
+            ShowConnectionError("Username is required");
+            return;
+        }
 
-            if (string.IsNullOrWhiteSpace(username))
-            {
-                ShowConnectionError("Username is required for credential authentication");
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(password))
-            {
-                ShowConnectionError("Password is required for credential authentication");
-                return;
-            }
-
-            // Warn about security implications
-            var warningResult = MessageBox.Show(
-                "SECURITY WARNING\n\n" +
-                "You are about to authenticate using username and password.\n\n" +
-                "This method:\n" +
-                "• Does NOT support MFA-enabled accounts\n" +
-                "• Transmits credentials directly (less secure)\n" +
-                "• Should only be used during incidents where MFA is compromised\n\n" +
-                "Are you sure you want to continue?",
-                "Confirm Authentication Method",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-
-            if (warningResult != MessageBoxResult.Yes)
-                return;
+        if (securePassword.Length == 0)
+        {
+            ShowConnectionError("Password is required");
+            return;
         }
 
         _currentClientId = clientId;
 
         ConnectButton.IsEnabled = false;
-        ConnectButton.Content = useCredentials ? "Authenticating..." : "Connecting...";
+        ConnectButton.Content = "Authenticating...";
         ConnectionErrorPanel.Visibility = Visibility.Collapsed;
-        DeviceCodePanel.Visibility = Visibility.Collapsed;
 
         try
         {
@@ -198,31 +177,24 @@ public partial class MainWindow : Window
                 }
             };
 
-            _authService = new AuthenticationService(config, OnDeviceCodeReceived);
+            _authService = new AuthenticationService(config);
             
-            AuthenticationResult result;
-
-            if (useCredentials)
-            {
-                AddLogEntry("Authenticating with username/password...", LogLevel.Warning);
-                UpdateStatus("Authenticating with credentials...");
-                result = await _authService.AuthenticateWithCredentialsAsync(username!, password!);
-            }
-            else
-            {
-                AddLogEntry("Initiating device code authentication...", LogLevel.Info);
-                UpdateStatus("Waiting for authentication...");
-                result = await _authService.AuthenticateAsync();
-            }
+            // Using the updated method signature
+            _authService.OnTokenRefreshed += (sender, expiresOn) => OnTokenRefreshed(expiresOn);
+            
+            AddLogEntry("Authenticating...", LogLevel.Info);
+            UpdateStatus("Authenticating...");
+            
+            var result = await _authService.AuthenticateAsync(username, securePassword);
 
             if (result.Success)
             {
                 _revocationService = new TokenRevocationService(_authService);
                 _backdoorService = new BackdoorDetectionService(_authService);
+                _riskyAccountService = new RiskyAccountService(_authService.GraphClient!);
                 
                 _revocationService.OnThrottled += OnThrottled;
                 
-                DeviceCodePanel.Visibility = Visibility.Collapsed;
                 LoginPanel.Visibility = Visibility.Collapsed;
                 MainPanel.Visibility = Visibility.Visible;
                 
@@ -230,89 +202,84 @@ public partial class MainWindow : Window
                 AuthStatusText.Text = result.UserPrincipalName;
                 AuthMethodText.Text = $"({result.AuthMethod})";
                 SignOutButton.Visibility = Visibility.Visible;
+                
+                if (result.TokenExpiresOn.HasValue)
+                {
+                    UpdateTokenStatus(result.TokenExpiresOn.Value);
+                }
 
                 PasswordInput.Clear();
+                
+                UsernameInput.Clear();
 
-                AddLogEntry($"Connected as {result.UserPrincipalName} via {result.AuthMethod}", LogLevel.Success);
+                AddLogEntry($"Connected as {result.UserPrincipalName}", LogLevel.Success);
                 UpdateStatus($"Connected as {result.DisplayName}");
             }
             else
             {
                 ShowConnectionError(result.ErrorMessage ?? "Authentication failed");
-                AddLogEntry($"Authentication failed: {result.ErrorMessage}", LogLevel.Error);
+                AddLogEntry("Authentication failed", LogLevel.Error);
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            ShowConnectionError(ex.Message);
-            AddLogEntry($"Connection error: {ex.Message}", LogLevel.Error);
+            ShowConnectionError("An unexpected error occurred during authentication");
+            AddLogEntry("Connection error occurred", LogLevel.Error);
         }
         finally
         {
             ConnectButton.IsEnabled = true;
-            ConnectButton.Content = useCredentials ? "Connect with Credentials" : "Connect with Device Code";
-        }
-    }
-
-    private void OnDeviceCodeReceived(string message, string userCode)
-    {
-        Dispatcher.Invoke(() =>
-        {
-            _currentDeviceCode = userCode;
-            DeviceCodeMessage.Text = message;
-            DeviceCodePanel.Visibility = Visibility.Visible;
-        });
-    }
-
-    private void CopyCodeButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (!string.IsNullOrEmpty(_currentDeviceCode))
-        {
-            Clipboard.SetText(_currentDeviceCode);
-            CopyCodeButton.Content = "Copied!";
-            AddLogEntry("Device code copied to clipboard", LogLevel.Info);
+            ConnectButton.Content = "Authenticate";
             
-            Task.Delay(2000).ContinueWith(_ =>
-            {
-                Dispatcher.Invoke(() => CopyCodeButton.Content = "Copy Code to Clipboard");
-            });
+            PasswordInput.Clear();
         }
     }
 
-    private void SignOutButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_revocationService != null)
-        {
-            _revocationService.OnThrottled -= OnThrottled;
-        }
-        
-        _authService?.SignOut();
-        _authService = null;
-        _revocationService = null;
-        _backdoorService = null;
-
-        _throttleCountdownTimer?.Stop();
-        ThrottleAlertBanner.Visibility = Visibility.Collapsed;
-
-        MainPanel.Visibility = Visibility.Collapsed;
-        LoginPanel.Visibility = Visibility.Visible;
-        SignOutButton.Visibility = Visibility.Collapsed;
-        AuthStatusText.Text = "Not connected";
-        AuthMethodText.Text = "";
-
-        DeviceCodeRadio.IsChecked = true;
-        CredentialsPanel.Visibility = Visibility.Collapsed;
-        UsernameInput.Clear();
-        PasswordInput.Clear();
-
-        AddLogEntry("Signed out", LogLevel.Info);
-        UpdateStatus("Disconnected");
-    }
 
     private void ShowConnectionError(string message)
     {
         ConnectionErrorText.Text = message;
         ConnectionErrorPanel.Visibility = Visibility.Visible;
+    }
+
+    // Updated method signature to accept DateTimeOffset
+    private void OnTokenRefreshed(DateTimeOffset expiresOn)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var remaining = expiresOn - DateTimeOffset.UtcNow;
+            var color = remaining.TotalMinutes > 60 ? "#107C10" : // Green
+                       remaining.TotalMinutes > 10 ? "#FF8C00" : "#D32F2F"; // Orange, Red
+            
+            if (FindName("TokenStatusText") is TextBlock tokenStatus)
+            {
+                tokenStatus.Text = $"Token: {remaining.TotalMinutes:F0}m remaining";
+                tokenStatus.Foreground = new SolidColorBrush(
+                    (Color)ColorConverter.ConvertFromString(color));
+            }
+            
+            AddLogEntry("Token refreshed successfully", LogLevel.Info);
+        });
+    }
+
+    private void UpdateTokenStatus(DateTimeOffset expiresOn)
+    {
+        var timeRemaining = expiresOn - DateTimeOffset.UtcNow;
+        if (timeRemaining.TotalMinutes > 60)
+        {
+            TokenStatusText.Text = $"Token valid for {timeRemaining.Hours}h {timeRemaining.Minutes}m";
+            TokenStatusText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#107C10"));
+        }
+        else if (timeRemaining.TotalMinutes > 10)
+        {
+            TokenStatusText.Text = $"Token valid for {timeRemaining.Minutes}m";
+            TokenStatusText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF8C00"));
+        }
+        else
+        {
+            TokenStatusText.Text = $"Token expires soon ({timeRemaining.Minutes}m)";
+            TokenStatusText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D32F2F"));
+        }
     }
 
     #endregion
@@ -1055,6 +1022,12 @@ public partial class MainWindow : Window
 
     #region Activity Log
 
+    private void InitializeActivityLog()
+    {
+        // This method is not present in the original code, but if it were, its content would go here.
+        // For now, it's a placeholder to acknowledge the marker in the updates.
+    }
+
     private void AddLogEntry(string message, LogLevel level)
     {
         var entry = new ActivityLogEntry
@@ -1094,11 +1067,12 @@ public partial class MainWindow : Window
         {
             try
             {
-                var entries = _activityLog.Select(e => new
+                var entries = _activityLog.Select(entry => new
                 {
-                    e.Timestamp,
-                    e.Message,
-                    Level = e.Level.ToString()
+                    entry.Timestamp,
+                    // Redact email addresses and UPNs from log messages
+                    Message = SanitizeLogMessage(entry.Message),
+                    Level = entry.Level.ToString()
                 });
 
                 var json = System.Text.Json.JsonSerializer.Serialize(entries, new System.Text.Json.JsonSerializerOptions
@@ -1107,15 +1081,28 @@ public partial class MainWindow : Window
                 });
 
                 System.IO.File.WriteAllText(dialog.FileName, json);
-                AddLogEntry($"Audit log exported to {dialog.FileName}", LogLevel.Success);
+                AddLogEntry("Audit log exported", LogLevel.Success);
                 MessageBox.Show("Audit log exported successfully", "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                AddLogEntry($"Failed to export audit log: {ex.Message}", LogLevel.Error);
-                MessageBox.Show($"Export failed: {ex.Message}", "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                AddLogEntry("Failed to export audit log", LogLevel.Error);
+                MessageBox.Show("Export failed. Please check file permissions.", "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+    }
+    
+    private static string SanitizeLogMessage(string message)
+    {
+        if (string.IsNullOrEmpty(message)) return message;
+        
+        // Regex to match email/UPN patterns
+        var emailPattern = new Regex(
+            @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+            RegexOptions.Compiled);
+        
+        // Replace with redacted placeholder
+        return emailPattern.Replace(message, "[REDACTED_UPN]");
     }
 
     private void ClearLogButton_Click(object sender, RoutedEventArgs e)
@@ -1142,13 +1129,6 @@ public partial class MainWindow : Window
         FindingDetailsPanel.Visibility = Visibility.Collapsed;
         _findings.Clear();
 
-        // Set known internal IPs
-        var knownIps = KnownInternalIpsInput.Text
-            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(ip => ip.Trim())
-            .Where(ip => !string.IsNullOrEmpty(ip))
-            .ToList();
-        _backdoorService.SetKnownInternalIps(knownIps);
 
         AddLogEntry("Starting backdoor detection scan...", LogLevel.Warning);
         UpdateStatus("Running backdoor detection scan...");
@@ -1243,6 +1223,9 @@ public partial class MainWindow : Window
             BackdoorType.AdminConsentGrant => "Admin Consent",
             BackdoorType.SuspiciousCredential => "App Credential",
             BackdoorType.UnknownPTAAgent => "Unknown PTA Agent",
+            BackdoorType.FederationMfaBypass => "MFA Bypass",
+            BackdoorType.SecondarySigningCertificate => "Secondary Signing Cert",
+            BackdoorType.SuspiciousSigningCertificate => "Suspicious Signing Cert",
             _ => type.ToString()
         };
     }
@@ -1267,6 +1250,8 @@ public partial class MainWindow : Window
             _selectedFinding = null;
             RevokeFederationPanel.Visibility = Visibility.Collapsed;
             MassRevokeFederationPanel.Visibility = Visibility.Collapsed;
+            RemediationPanel.Visibility = Visibility.Collapsed;
+            MassRemediateAllPanel.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -1287,162 +1272,185 @@ public partial class MainWindow : Window
         // Set details
         FindingDetailsList.ItemsSource = finding.Details?.ToList() ?? new List<KeyValuePair<string, string>>();
 
-        if (finding.Type == BackdoorType.FederatedDomainBackdoor)
+        RevokeFederationPanel.Visibility = Visibility.Collapsed;
+        MassRevokeFederationPanel.Visibility = Visibility.Collapsed;
+        RemediationPanel.Visibility = Visibility.Collapsed;
+        MassRemediateAllPanel.Visibility = Visibility.Collapsed;
+        ConfirmRemediationCheckbox.IsChecked = false;
+        RemediateButton.IsEnabled = false;
+
+        switch (finding.Type)
         {
-            RevokeFederationPanel.Visibility = Visibility.Visible;
-            ConfirmRevokeFederationCheckbox.IsChecked = false;
-            RevokeFederationButton.IsEnabled = false;
-            
-            // Show mass revoke option and update count
-            var federationBackdoorCount = _findings.Count(f => f.Type == BackdoorType.FederatedDomainBackdoor);
-            if (federationBackdoorCount > 1)
-            {
-                MassRevokeFederationPanel.Visibility = Visibility.Visible;
-                MassRevokeFederationCount.Text = $"Found {federationBackdoorCount} federation backdoors that can be revoked.";
-                ConfirmMassRevokeFederation1.IsChecked = false;
-                ConfirmMassRevokeFederation2.IsChecked = false;
-                MassRevokeFederationButton.IsEnabled = false;
-            }
-            else
-            {
-                MassRevokeFederationPanel.Visibility = Visibility.Collapsed;
-            }
-        }
-        else
-        {
-            RevokeFederationPanel.Visibility = Visibility.Collapsed;
-            MassRevokeFederationPanel.Visibility = Visibility.Collapsed;
+            case BackdoorType.FederatedDomainBackdoor:
+                RevokeFederationPanel.Visibility = Visibility.Visible;
+                ConfirmRevokeFederationCheckbox.IsChecked = false;
+                RevokeFederationButton.IsEnabled = false;
+                ShowMassRemediationOptions();
+                break;
+                
+            case BackdoorType.FederationMfaBypass:
+                ShowRemediationPanel(
+                    "FIX MFA BYPASS VULNERABILITY",
+                    "This will set federatedIdpMfaBehavior to 'rejectMfaByFederatedIdp', ensuring Entra ID enforces MFA even when the federated IdP claims MFA was already performed. This prevents Golden SAML-style attacks.",
+                    "I understand this will change federation MFA behavior and users may need to complete MFA again");
+                ShowMassRemediationOptions();
+                break;
+                
+            case BackdoorType.SecondarySigningCertificate:
+                ShowRemediationPanel(
+                    "REMOVE SECONDARY SIGNING CERTIFICATE",
+                    "This will remove the secondary (next) signing certificate from the federation configuration. If this certificate was added by an attacker, removing it will prevent them from forging tokens.",
+                    "I understand this will remove the secondary signing certificate");
+                ShowMassRemediationOptions();
+                break;
+                
+            case BackdoorType.SuspiciousSigningCertificate:
+                ShowRemediationPanel(
+                    "REVOKE SUSPICIOUS FEDERATION",
+                    "The signing certificate has suspicious characteristics. This will remove the entire federation configuration for this domain, converting it to managed authentication.",
+                    "I understand this will convert the domain to managed authentication");
+                ShowMassRemediationOptions();
+                break;
+                
+            case BackdoorType.SuspiciousServicePrincipal:
+                ShowRemediationPanel(
+                    "DELETE SUSPICIOUS SERVICE PRINCIPAL",
+                    "This will permanently delete the suspicious service principal (enterprise application) from your tenant. All associated permissions and access will be revoked.",
+                    "I understand this will permanently delete the application");
+                ShowMassRemediationOptions();
+                break;
+                
+            case BackdoorType.AdminConsentGrant:
+                ShowRemediationPanel(
+                    "REVOKE ADMIN CONSENT GRANT",
+                    "This will revoke the admin consent grant, removing the application's ability to access resources on behalf of all users in the organization.",
+                    "I understand this will revoke the admin consent");
+                ShowMassRemediationOptions();
+                break;
+                
+            default:
+                // For non-remediatable types, still show mass remediation if there are remediatable findings
+                ShowMassRemediationOptions();
+                break;
         }
     }
 
-    private void ExportFindingsButton_Click(object sender, RoutedEventArgs e)
+    private void ShowRemediationPanel(string title, string description, string confirmText)
     {
-        if (_lastScanResult == null)
-            return;
+        RemediationPanel.Visibility = Visibility.Visible;
+        RemediationTitle.Text = title;
+        RemediationDescription.Text = description;
+        RemediationConfirmText.Text = confirmText;
+        ConfirmRemediationCheckbox.IsChecked = false;
+        RemediateButton.IsEnabled = false;
+    }
 
-        var dialog = new SaveFileDialog
+    private void ShowMassRemediationOptions()
+    {
+        if (_lastScanResult == null) return;
+        
+        // Backdoor types that can be automatically remediated
+        var remediableTypes = new[]
         {
-            Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
-            DefaultExt = ".json",
-            FileName = $"backdoor_scan_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+            BackdoorType.FederatedDomainBackdoor,
+            BackdoorType.FederationMfaBypass,
+            BackdoorType.SecondarySigningCertificate,
+            BackdoorType.SuspiciousSigningCertificate,
+            BackdoorType.SuspiciousServicePrincipal,
+            BackdoorType.AdminConsentGrant
         };
-
-        if (dialog.ShowDialog() == true)
+        
+        var remediableCount = _lastScanResult.Findings.Count(f => remediableTypes.Contains(f.Type));
+        var federationCount = _lastScanResult.Findings.Count(f => f.Type == BackdoorType.FederatedDomainBackdoor);
+        
+        // Show mass federation revoke panel if multiple federation backdoors
+        if (federationCount > 1 && _selectedFinding?.Type == BackdoorType.FederatedDomainBackdoor)
         {
-            try
-            {
-                var exportData = new
-                {
-                    _lastScanResult.ScanStartTime,
-                    _lastScanResult.ScanEndTime,
-                    Duration = _lastScanResult.Duration.ToString(),
-                    _lastScanResult.CriticalCount,
-                    _lastScanResult.HighCount,
-                    _lastScanResult.MediumCount,
-                    _lastScanResult.LowCount,
-                    _lastScanResult.DomainsScanned,
-                    _lastScanResult.ServicePrincipalsScanned,
-                    _lastScanResult.OAuthGrantsScanned,
-                    _lastScanResult.PTAAgentsScanned,
-                    _lastScanResult.Errors,
-                    Findings = _lastScanResult.Findings.Select(f => new
-                    {
-                        f.Id,
-                        Type = f.Type.ToString(),
-                        Severity = f.Severity.ToString(),
-                        f.Title,
-                        f.Description,
-                        f.AffectedResource,
-                        f.ResourceId,
-                        f.Recommendation,
-                        f.MitreAttackTechnique,
-                        f.Details,
-                        f.DetectedAt
-                    })
-                };
-
-                var json = System.Text.Json.JsonSerializer.Serialize(exportData, new System.Text.Json.JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
-
-                System.IO.File.WriteAllText(dialog.FileName, json);
-                AddLogEntry($"Findings exported to {dialog.FileName}", LogLevel.Success);
-                MessageBox.Show("Findings exported successfully", "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                AddLogEntry($"Failed to export findings: {ex.Message}", LogLevel.Error);
-                MessageBox.Show($"Export failed: {ex.Message}", "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            MassRevokeFederationPanel.Visibility = Visibility.Visible;
+            MassRevokeFederationCount.Text = $"Found {federationCount} federation backdoors that can be revoked.";
+            ConfirmMassRevokeFederation1.IsChecked = false;
+            ConfirmMassRevokeFederation2.IsChecked = false;
+            MassRevokeFederationButton.IsEnabled = false;
+        }
+        
+        // Show mass remediate all panel if multiple remediatable findings
+        if (remediableCount > 1)
+        {
+            MassRemediateAllPanel.Visibility = Visibility.Visible;
+            MassRemediateAllCount.Text = $"Found {remediableCount} backdoors that can be automatically remediated.";
+            ConfirmMassRemediateAll1.IsChecked = false;
+            ConfirmMassRemediateAll2.IsChecked = false;
+            ConfirmMassRemediateAll3.IsChecked = false;
+            MassRemediateAllButton.IsEnabled = false;
         }
     }
 
-    private void ConfirmRevokeFederationCheckbox_Changed(object sender, RoutedEventArgs e)
+    private void ConfirmRemediationCheckbox_Changed(object sender, RoutedEventArgs e)
     {
-        RevokeFederationButton.IsEnabled = ConfirmRevokeFederationCheckbox.IsChecked == true;
+        RemediateButton.IsEnabled = ConfirmRemediationCheckbox.IsChecked == true;
     }
 
-    private void ConfirmMassRevokeFederation_Changed(object sender, RoutedEventArgs e)
+    private void ConfirmMassRemediateAll_Changed(object sender, RoutedEventArgs e)
     {
-        MassRevokeFederationButton.IsEnabled = 
-            ConfirmMassRevokeFederation1.IsChecked == true && 
-            ConfirmMassRevokeFederation2.IsChecked == true;
+        MassRemediateAllButton.IsEnabled = 
+            ConfirmMassRemediateAll1.IsChecked == true && 
+            ConfirmMassRemediateAll2.IsChecked == true &&
+            ConfirmMassRemediateAll3.IsChecked == true;
     }
 
-    private async void RevokeFederationButton_Click(object sender, RoutedEventArgs e)
+    private async void RemediateButton_Click(object sender, RoutedEventArgs e)
     {
         if (_backdoorService == null || _selectedFinding == null)
             return;
 
-        var domainId = _selectedFinding.AffectedResource ?? _selectedFinding.ResourceId;
-        if (string.IsNullOrEmpty(domainId))
-        {
-            MessageBox.Show("Could not determine domain ID for revocation.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            return;
-        }
-
+        var resourceName = _selectedFinding.AffectedResource ?? _selectedFinding.ResourceId ?? "Unknown";
+        
         var confirm = MessageBox.Show(
-            $"Are you sure you want to revoke the federation configuration for domain '{domainId}'?\n\n" +
-            "This will:\n" +
-            "• Delete the federation trust configuration\n" +
-            "• Convert the domain to managed authentication\n" +
-            "• Force all users to authenticate directly via Entra ID\n\n" +
-            "This action is typically irreversible without manual reconfiguration.",
-            "Confirm Federation Revocation",
+            $"Are you sure you want to remediate this finding?\n\n" +
+            $"Type: {_selectedFinding.Type}\n" +
+            $"Resource: {resourceName}\n\n" +
+            "This action may not be easily reversible.",
+            "Confirm Remediation",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
 
         if (confirm != MessageBoxResult.Yes)
             return;
 
-        RevokeFederationButton.IsEnabled = false;
-        RevokeFederationButton.Content = "Revoking...";
-        AddLogEntry($"Revoking federation backdoor for domain: {domainId}", LogLevel.Warning);
-        UpdateStatus($"Revoking federation for {domainId}...");
+        RemediateButton.IsEnabled = false;
+        RemediateButton.Content = "Remediating...";
+        AddLogEntry($"Remediating {_selectedFinding.Type}: {resourceName}", LogLevel.Warning);
+        UpdateStatus($"Remediating {resourceName}...");
 
         try
         {
-            var federationConfigId = _selectedFinding.Details?.TryGetValue("FederationConfigId", out var configId) == true 
-                ? configId : null;
+            // Convert FindingViewModel to BackdoorFinding
+            var finding = new BackdoorFinding
+            {
+                Type = _selectedFinding.Type,
+                ResourceId = _selectedFinding.ResourceId,
+                AffectedResource = _selectedFinding.AffectedResource,
+                Details = _selectedFinding.Details ?? new Dictionary<string, string>()
+            };
 
-            var result = await _backdoorService.RevokeFederatedBackdoorAsync(domainId, federationConfigId);
+            var result = await _backdoorService.RemediateBackdoorAsync(finding);
 
             if (result.Success)
             {
-                AddLogEntry($"Successfully revoked federation backdoor for {domainId}", LogLevel.Success);
-                MessageBox.Show(result.Message, "Federation Revoked", MessageBoxButton.OK, MessageBoxImage.Information);
+                AddLogEntry($"Successfully remediated {_selectedFinding.Type}: {resourceName}", LogLevel.Success);
+                MessageBox.Show(result.Message, "Remediation Successful", MessageBoxButton.OK, MessageBoxImage.Information);
 
                 // Remove the finding from the list
                 _findings.Remove(_selectedFinding);
                 FindingDetailsPanel.Visibility = Visibility.Collapsed;
+                RemediationPanel.Visibility = Visibility.Collapsed;
                 
                 // Update counts
                 if (_lastScanResult != null)
                 {
                     _lastScanResult.Findings.RemoveAll(f => 
-                        f.Type == BackdoorType.FederatedDomainBackdoor && 
-                        (f.AffectedResource == domainId || f.ResourceId == domainId));
+                        f.Type == _selectedFinding.Type && 
+                        (f.AffectedResource == resourceName || f.ResourceId == _selectedFinding.ResourceId));
                     _lastScanResult.CriticalCount = _lastScanResult.Findings.Count(f => f.Severity == SeverityLevel.Critical);
                     _lastScanResult.HighCount = _lastScanResult.Findings.Count(f => f.Severity == SeverityLevel.High);
                     DisplayScanResults(_lastScanResult);
@@ -1450,61 +1458,73 @@ public partial class MainWindow : Window
             }
             else
             {
-                AddLogEntry($"Failed to revoke federation backdoor: {result.Message}", LogLevel.Error);
-                MessageBox.Show($"Failed to revoke federation:\n\n{result.Message}\n\n{result.ErrorDetails}", 
-                    "Revocation Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                AddLogEntry($"Failed to remediate: {result.Message}", LogLevel.Error);
+                MessageBox.Show($"Remediation failed:\n\n{result.Message}\n\n{result.ErrorDetails}", 
+                    "Remediation Failed", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         catch (Exception ex)
         {
-            AddLogEntry($"Error revoking federation backdoor: {ex.Message}", LogLevel.Error);
+            AddLogEntry($"Error during remediation: {ex.Message}", LogLevel.Error);
             MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
-            RevokeFederationButton.IsEnabled = true;
-            RevokeFederationButton.Content = "Revoke Federation Configuration";
-            ConfirmRevokeFederationCheckbox.IsChecked = false;
+            RemediateButton.IsEnabled = true;
+            RemediateButton.Content = "Remediate";
+            ConfirmRemediationCheckbox.IsChecked = false;
             UpdateStatus("Ready");
         }
     }
 
-    private async void MassRevokeFederationButton_Click(object sender, RoutedEventArgs e)
+    private async void MassRemediateAllButton_Click(object sender, RoutedEventArgs e)
     {
         if (_backdoorService == null || _lastScanResult == null)
             return;
 
-        var federationFindings = _lastScanResult.Findings
-            .Where(f => f.Type == BackdoorType.FederatedDomainBackdoor)
+        var remediableTypes = new[]
+        {
+            BackdoorType.FederatedDomainBackdoor,
+            BackdoorType.FederationMfaBypass,
+            BackdoorType.SecondarySigningCertificate,
+            BackdoorType.SuspiciousSigningCertificate,
+            BackdoorType.SuspiciousServicePrincipal,
+            BackdoorType.AdminConsentGrant
+        };
+
+        var remediableFindings = _lastScanResult.Findings
+            .Where(f => remediableTypes.Contains(f.Type))
             .ToList();
 
-        if (federationFindings.Count == 0)
+        if (remediableFindings.Count == 0)
         {
-            MessageBox.Show("No federation backdoors found to revoke.", "No Backdoors", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("No remediatable backdoors found.", "No Backdoors", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         var confirm = MessageBox.Show(
-            $"CRITICAL ACTION: Mass Revoke {federationFindings.Count} Federation Backdoor(s)\n\n" +
-            "This will revoke ALL detected federation backdoors:\n" +
-            string.Join("\n", federationFindings.Select(f => $"  • {f.AffectedResource}")) + "\n\n" +
-            "This is an INCIDENT RESPONSE action that will:\n" +
-            "• Delete all suspicious federation trust configurations\n" +
-            "• Convert affected domains to managed authentication\n" +
-            "• Force all users on those domains to authenticate via Entra ID\n\n" +
-            "Are you absolutely sure you want to proceed?",
-            "Confirm Mass Federation Revocation",
+            "CRITICAL ACTION: Mass Remediate " + remediableFindings.Count + " Backdoor(s)\n\n" +
+            "This will remediate ALL detected backdoors including:\n" +
+            $"  • Federation backdoors: {remediableFindings.Count(f => f.Type == BackdoorType.FederatedDomainBackdoor)}\n" +
+            $"  • MFA bypass configs: {remediableFindings.Count(f => f.Type == BackdoorType.FederationMfaBypass)}\n" +
+            $"  • Secondary certificates: {remediableFindings.Count(f => f.Type == BackdoorType.SecondarySigningCertificate)}\n" +
+            $"  • Suspicious certificates: {remediableFindings.Count(f => f.Type == BackdoorType.SuspiciousSigningCertificate)}\n" +
+            $"  • Suspicious apps: {remediableFindings.Count(f => f.Type == BackdoorType.SuspiciousServicePrincipal)}\n" +
+            $"  • Admin consent grants: {remediableFindings.Count(f => f.Type == BackdoorType.AdminConsentGrant)}\n\n" +
+            "This is an INCIDENT RESPONSE action. Are you sure?",
+            "Confirm Mass Remediation",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
 
         if (confirm != MessageBoxResult.Yes)
             return;
 
-        // Second confirmation for mass action
+        // Second confirmation
         var secondConfirm = MessageBox.Show(
             "FINAL CONFIRMATION\n\n" +
-            $"You are about to revoke {federationFindings.Count} federation configuration(s).\n\n" +
-            "Type 'YES' in your mind and click Yes to proceed.",
+            $"You are about to remediate {remediableFindings.Count} backdoor(s).\n\n" +
+            "This action will modify your tenant configuration and cannot be easily undone.\n\n" +
+            "Proceed with mass remediation?",
             "Final Confirmation",
             MessageBoxButton.YesNo,
             MessageBoxImage.Stop);
@@ -1512,78 +1532,328 @@ public partial class MainWindow : Window
         if (secondConfirm != MessageBoxResult.Yes)
             return;
 
-        MassRevokeFederationButton.IsEnabled = false;
-        MassRevokeFederationProgress.Visibility = Visibility.Visible;
-        MassRevokeFederationProgressBar.Maximum = federationFindings.Count;
-        MassRevokeFederationProgressBar.Value = 0;
+        MassRemediateAllButton.IsEnabled = false;
+        MassRemediateAllProgress.Visibility = Visibility.Visible;
+        MassRemediateAllProgressBar.Maximum = remediableFindings.Count;
+        MassRemediateAllProgressBar.Value = 0;
 
-        AddLogEntry($"Starting mass revocation of {federationFindings.Count} federation backdoors", LogLevel.Warning);
-        UpdateStatus("Mass revoking federation backdoors...");
+        AddLogEntry($"Starting mass remediation of {remediableFindings.Count} backdoors", LogLevel.Warning);
+        UpdateStatus("Mass remediating backdoors...");
 
         try
         {
-            var results = await _backdoorService.MassRevokeFederatedBackdoorsAsync(
-                federationFindings,
-                (domain, current, total) =>
+            var results = await _backdoorService.MassRemediateAllBackdoorsAsync(
+                remediableFindings,
+                (resourceName, current, total) =>
                 {
                     Dispatcher.Invoke(() =>
                     {
-                        MassRevokeFederationProgressText.Text = $"Revoking {domain} ({current}/{total})...";
-                        MassRevokeFederationProgressBar.Value = current;
+                        MassRemediateAllProgressText.Text = $"Remediating {resourceName} ({current}/{total})...";
+                        MassRemediateAllProgressBar.Value = current;
                     });
                 });
 
             var successCount = results.Count(r => r.Success);
             var failCount = results.Count(r => !r.Success);
 
-            AddLogEntry($"Mass federation revocation complete: {successCount} succeeded, {failCount} failed", 
+            AddLogEntry($"Mass remediation complete: {successCount} succeeded, {failCount} failed", 
                 successCount > 0 ? LogLevel.Success : LogLevel.Error);
 
-            // Remove successful revocations from findings
+            // Remove successful remediations from findings
             foreach (var result in results.Where(r => r.Success))
             {
-                var findingToRemove = _findings.FirstOrDefault(f => 
-                    f.Type == BackdoorType.FederatedDomainBackdoor && 
-                    (f.AffectedResource == result.DomainId || f.ResourceId == result.DomainId));
+                var findingsToRemove = _findings.Where(f => 
+                    f.ResourceId == result.DomainId || 
+                    f.AffectedResource == result.DomainId).ToList();
                 
-                if (findingToRemove != null)
-                    _findings.Remove(findingToRemove);
+                foreach (var finding in findingsToRemove)
+                    _findings.Remove(finding);
 
                 _lastScanResult.Findings.RemoveAll(f => 
-                    f.Type == BackdoorType.FederatedDomainBackdoor && 
-                    (f.AffectedResource == result.DomainId || f.ResourceId == result.DomainId));
+                    f.ResourceId == result.DomainId || 
+                    f.AffectedResource == result.DomainId);
             }
 
             // Update display
             _lastScanResult.CriticalCount = _lastScanResult.Findings.Count(f => f.Severity == SeverityLevel.Critical);
             _lastScanResult.HighCount = _lastScanResult.Findings.Count(f => f.Severity == SeverityLevel.High);
+            _lastScanResult.MediumCount = _lastScanResult.Findings.Count(f => f.Severity == SeverityLevel.Medium);
+            _lastScanResult.LowCount = _lastScanResult.Findings.Count(f => f.Severity == SeverityLevel.Low);
             DisplayScanResults(_lastScanResult);
             FindingDetailsPanel.Visibility = Visibility.Collapsed;
 
-            var message = $"Mass Federation Revocation Complete\n\n" +
+            var message = $"Mass Remediation Complete\n\n" +
                          $"Successful: {successCount}\n" +
                          $"Failed: {failCount}\n\n";
             
             if (failCount > 0)
             {
-                message += "Failed domains:\n" + 
-                    string.Join("\n", results.Where(r => !r.Success).Select(r => $"  • {r.DomainId}: {r.Message}"));
+                message += "Failed items:\n" + 
+                    string.Join("\n", results.Where(r => !r.Success).Take(10).Select(r => $"  • {r.DomainId}: {r.Message}"));
+                if (failCount > 10)
+                    message += $"\n  ... and {failCount - 10} more";
             }
 
-            MessageBox.Show(message, "Mass Revocation Complete", MessageBoxButton.OK, 
+            MessageBox.Show(message, "Mass Remediation Complete", MessageBoxButton.OK, 
                 failCount > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            AddLogEntry($"Error during mass federation revocation: {ex.Message}", LogLevel.Error);
+            AddLogEntry($"Error during mass remediation: {ex.Message}", LogLevel.Error);
             MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
-            MassRevokeFederationButton.IsEnabled = true;
-            MassRevokeFederationProgress.Visibility = Visibility.Collapsed;
-            ConfirmMassRevokeFederation1.IsChecked = false;
-            ConfirmMassRevokeFederation2.IsChecked = false;
+            MassRemediateAllButton.IsEnabled = true;
+            MassRemediateAllProgress.Visibility = Visibility.Collapsed;
+            ConfirmMassRemediateAll1.IsChecked = false;
+            ConfirmMassRemediateAll2.IsChecked = false;
+            ConfirmMassRemediateAll3.IsChecked = false;
+            UpdateStatus("Ready");
+        }
+    }
+
+    #endregion
+
+    #region Risky Accounts
+    
+    private async void ScanRiskyAccountsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_riskyAccountService == null || _authService == null)
+        {
+            MessageBox.Show("Please connect to Entra ID first.", "Not Connected", 
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        ScanRiskyAccountsButton.IsEnabled = false;
+        ScanRiskyAccountsButton.Content = "Scanning...";
+        RiskyAccountsScanStatus.Text = "Scanning users...";
+        _riskyAccounts.Clear();
+        RiskSummaryPanel.Visibility = Visibility.Collapsed;
+
+        _cancellationTokenSource = new CancellationTokenSource();
+
+        AddLogEntry("Starting risky account scan...", LogLevel.Info);
+        UpdateStatus("Scanning for risky accounts...");
+
+        try
+        {
+            var result = await _riskyAccountService.ScanForRiskyAccountsAsync(
+                (scanned, found) =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        RiskyAccountsScanStatus.Text = $"Scanned {scanned} users, found {found} risky accounts...";
+                    });
+                },
+                _cancellationTokenSource.Token);
+
+            if (result.Success)
+            {
+                foreach (var account in result.RiskyAccounts)
+                {
+                    _riskyAccounts.Add(account);
+                }
+
+                // Update summary panel
+                RiskSummaryPanel.Visibility = Visibility.Visible;
+                RiskyCriticalCount.Text = result.RiskyAccounts.Count(a => a.Severity == RiskSeverity.Critical).ToString();
+                RiskyHighCount.Text = result.RiskyAccounts.Count(a => a.Severity == RiskSeverity.High).ToString();
+                RiskyMediumCount.Text = result.RiskyAccounts.Count(a => a.Severity == RiskSeverity.Medium).ToString();
+                RiskyTotalScanned.Text = result.TotalUsersScanned.ToString();
+
+                RiskyAccountsScanStatus.Text = $"Found {result.RiskyAccountsFound} risky accounts out of {result.TotalUsersScanned} users";
+                
+                AddLogEntry($"Risky account scan complete. Found {result.RiskyAccountsFound} risky accounts.", 
+                    result.RiskyAccountsFound > 0 ? LogLevel.Warning : LogLevel.Success);
+            }
+            else
+            {
+                RiskyAccountsScanStatus.Text = result.ErrorMessage ?? "Scan failed";
+                AddLogEntry($"Risky account scan failed: {result.ErrorMessage}", LogLevel.Error);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            RiskyAccountsScanStatus.Text = "Scan cancelled";
+            AddLogEntry("Risky account scan cancelled", LogLevel.Warning);
+        }
+        catch (Exception ex)
+        {
+            RiskyAccountsScanStatus.Text = "Scan error";
+            AddLogEntry($"Error during risky account scan: {ex.Message}", LogLevel.Error);
+            MessageBox.Show("An error occurred during the scan.", "Scan Error", 
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            ScanRiskyAccountsButton.IsEnabled = true;
+            ScanRiskyAccountsButton.Content = "Scan for Risky Accounts";
+            _cancellationTokenSource?.Dispose();
+            _cancellationTokenSource = null;
+            UpdateStatus("Ready");
+        }
+    }
+
+    private async void RemediateSelectedRiskyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_riskyAccountService == null || _authService?.CurrentUserId == null)
+            return;
+
+        var selectedAccounts = _riskyAccounts.Where(a => a.IsSelected).ToList();
+        if (!selectedAccounts.Any())
+        {
+            // If no checkboxes selected, use ListView selection
+            selectedAccounts = RiskyAccountsListView.SelectedItems.Cast<RiskyAccountViewModel>().ToList();
+        }
+
+        if (!selectedAccounts.Any())
+        {
+            MessageBox.Show("Please select accounts to remediate.", "No Selection", 
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var forceReset = RiskyForcePasswordResetCheck.IsChecked == true;
+        var disableAccount = RiskyDisableAccountCheck.IsChecked == true;
+
+        if (!forceReset && !disableAccount)
+        {
+            MessageBox.Show("Please select at least one remediation action (force password reset or disable account).", 
+                "No Action Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var actionText = new List<string>();
+        if (forceReset) actionText.Add("force password reset");
+        if (disableAccount) actionText.Add("disable the account");
+
+        var confirmResult = MessageBox.Show(
+            $"You are about to {string.Join(" and ", actionText)} for {selectedAccounts.Count} account(s).\n\n" +
+            "Your account is protected and will be skipped if included.\n\n" +
+            "Do you want to proceed?",
+            "Confirm Remediation",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (confirmResult != MessageBoxResult.Yes)
+            return;
+
+        RemediateSelectedRiskyButton.IsEnabled = false;
+        AddLogEntry($"Remediating {selectedAccounts.Count} risky accounts...", LogLevel.Info);
+        UpdateStatus("Remediating risky accounts...");
+
+        try
+        {
+            var (succeeded, failed) = await _riskyAccountService.BulkRemediateAsync(
+                selectedAccounts,
+                forceReset,
+                disableAccount,
+                _authService.CurrentUserId,
+                (current, total) =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        RiskyAccountsScanStatus.Text = $"Remediating {current} of {total}...";
+                    });
+                });
+
+            RiskyAccountsScanStatus.Text = $"Remediation complete. Success: {succeeded}, Failed: {failed}";
+            AddLogEntry($"Risky account remediation complete. Success: {succeeded}, Failed: {failed}", 
+                failed > 0 ? LogLevel.Warning : LogLevel.Success);
+
+            // Refresh the list
+            if (succeeded > 0)
+            {
+                MessageBox.Show(
+                    $"Remediation Complete\n\nSuccessful: {succeeded}\nFailed: {failed}\n\n" +
+                    "Click 'Scan for Risky Accounts' to refresh the list.",
+                    "Remediation Complete",
+                    MessageBoxButton.OK,
+                    failed > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            AddLogEntry($"Error during remediation: {ex.Message}", LogLevel.Error);
+            MessageBox.Show("An error occurred during remediation.", "Error", 
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            RemediateSelectedRiskyButton.IsEnabled = true;
+            UpdateStatus("Ready");
+        }
+    }
+
+    private async void RemediateAllCriticalButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_riskyAccountService == null || _authService?.CurrentUserId == null)
+            return;
+
+        var criticalAccounts = _riskyAccounts.Where(a => a.Severity == RiskSeverity.Critical).ToList();
+        
+        if (!criticalAccounts.Any())
+        {
+            MessageBox.Show("No critical risk accounts found.", "No Critical Accounts", 
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var confirmResult = MessageBox.Show(
+            $"You are about to DISABLE {criticalAccounts.Count} critical risk account(s) and force password reset.\n\n" +
+            "Critical accounts include those with:\n" +
+            "• Password never set (1601 epoch) on enabled accounts\n" +
+            "• Null password timestamp on enabled accounts\n\n" +
+            "Your account is protected and will be skipped if included.\n\n" +
+            "Do you want to proceed?",
+            "Confirm Critical Account Remediation",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (confirmResult != MessageBoxResult.Yes)
+            return;
+
+        RemediateAllCriticalButton.IsEnabled = false;
+        AddLogEntry($"Remediating {criticalAccounts.Count} critical risk accounts...", LogLevel.Warning);
+        UpdateStatus("Remediating critical accounts...");
+
+        try
+        {
+            var (succeeded, failed) = await _riskyAccountService.BulkRemediateAsync(
+                criticalAccounts,
+                forcePasswordReset: true,
+                disableAccount: true,
+                _authService.CurrentUserId,
+                (current, total) =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        RiskyAccountsScanStatus.Text = $"Remediating critical account {current} of {total}...";
+                    });
+                });
+
+            RiskyAccountsScanStatus.Text = $"Critical remediation complete. Success: {succeeded}, Failed: {failed}";
+            AddLogEntry($"Critical account remediation complete. Success: {succeeded}, Failed: {failed}", 
+                failed > 0 ? LogLevel.Warning : LogLevel.Success);
+
+            MessageBox.Show(
+                $"Critical Account Remediation Complete\n\nDisabled and forced password reset:\nSuccessful: {succeeded}\nFailed: {failed}\n\n" +
+                "Click 'Scan for Risky Accounts' to refresh the list.",
+                "Remediation Complete",
+                MessageBoxButton.OK,
+                failed > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            AddLogEntry($"Error during critical remediation: {ex.Message}", LogLevel.Error);
+            MessageBox.Show("An error occurred during remediation.", "Error", 
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            RemediateAllCriticalButton.IsEnabled = true;
             UpdateStatus("Ready");
         }
     }

@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:EntraTokenRevocationGUI"
         mc:Ignorable="d"
-        Title="Safeguard - Entra ID Incident Response Tool" 
+        Title="Safeguard - Entra ID Incident Response Tool"
         Height="800" Width="1200"
         MinHeight="700" MinWidth="1000"
         WindowStartupLocation="CenterScreen"
@@ -108,21 +108,21 @@
                 <StackPanel Grid.Column="0">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="🛡" FontSize="24" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                        <TextBlock Text="Safeguard" 
+                        <TextBlock Text="Safeguard"
                                    FontSize="24" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <TextBlock Text="Entra ID Incident Response Tool • Microsoft Graph API v1.0" 
+                    <TextBlock Text="Entra ID Incident Response Tool • Microsoft Graph API v1.0"
                                FontSize="12" Foreground="#B4D5F0" Margin="34,4,0,0"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border x:Name="AuthStatusIndicator" Width="10" Height="10" CornerRadius="5" 
+                    <Border x:Name="AuthStatusIndicator" Width="10" Height="10" CornerRadius="5"
                             Background="#FFB900" Margin="0,0,8,0"/>
-                    <TextBlock x:Name="AuthStatusText" Text="Not Connected" 
+                    <TextBlock x:Name="AuthStatusText" Text="Not Connected"
                                Foreground="White" FontSize="13" VerticalAlignment="Center"/>
-                    <Button x:Name="SignOutButton" Content="Sign Out" Margin="16,0,0,0" 
+                    <Button x:Name="SignOutButton" Content="Sign Out" Margin="16,0,0,0"
                             Visibility="Collapsed" Click="SignOutButton_Click"
-                            Style="{StaticResource SecondaryButtonStyle}" 
+                            Style="{StaticResource SecondaryButtonStyle}"
                             Foreground="White" BorderBrush="White"/>
                 </Grid>
             </Grid>
@@ -138,24 +138,25 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                
-                <TextBlock Grid.Column="0" Text="⚠" FontSize="18" Foreground="#E65100" 
+                <!-- Fixed typo: Grid.Defineitions -> Grid.ColumnDefinitions (was on wrong closing tag) -->
+
+                <TextBlock Grid.Column="0" Text="⚠" FontSize="18" Foreground="#E65100"
                            VerticalAlignment="Center" Margin="0,0,12,0"/>
-                
+
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="API Rate Limit Reached" FontSize="14" FontWeight="SemiBold" 
+                    <TextBlock Text="API Rate Limit Reached" FontSize="14" FontWeight="SemiBold"
                                Foreground="#E65100"/>
                     <TextBlock x:Name="ThrottleAlertMessage" FontSize="12" Foreground="#BF360C"
                                Text="Microsoft Graph API is throttling requests. Operations will automatically retry."/>
                 </StackPanel>
-                
+
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0">
                     <TextBlock Text="Retry in: " FontSize="12" Foreground="#E65100" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="ThrottleCountdownText" Text="60s" FontSize="14" FontWeight="Bold" 
+                    <TextBlock x:Name="ThrottleCountdownText" Text="60s" FontSize="14" FontWeight="Bold"
                                Foreground="#E65100" VerticalAlignment="Center"/>
                 </StackPanel>
-                
-                <Button x:Name="ThrottleDismissButton" Grid.Column="3" Content="Dismiss" 
+
+                <Button x:Name="ThrottleDismissButton" Grid.Column="3" Content="Dismiss"
                         Click="ThrottleDismissButton_Click"
                         Background="Transparent" BorderBrush="#FF9800" Foreground="#E65100"
                         Padding="12,6" Cursor="Hand"/>
@@ -165,20 +166,20 @@
         <!-- Main Content - Update Grid.Row from 1 to 2 -->
         <Grid Grid.Row="2" Margin="20">
             <!-- Not Authenticated View -->
-            <Border x:Name="LoginPanel" Style="{StaticResource CardStyle}" 
+            <Border x:Name="LoginPanel" Style="{StaticResource CardStyle}"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     MaxWidth="500" MaxHeight="500">
                 <StackPanel>
-                    <TextBlock Text="Connect to Entra ID" FontSize="24" FontWeight="SemiBold" 
+                    <TextBlock Text="Connect to Entra ID" FontSize="24" FontWeight="SemiBold"
                                Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
-                    <TextBlock Text="Authenticate to manage user tokens and sessions" 
-                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" 
+                    <TextBlock Text="Authenticate to manage user tokens and sessions"
+                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
                                Margin="0,0,0,24" TextWrapping="Wrap"/>
 
                     <!-- Configuration Section -->
-                    <TextBlock Text="CONFIGURATION" FontSize="11" FontWeight="SemiBold" 
+                    <TextBlock Text="CONFIGURATION" FontSize="11" FontWeight="SemiBold"
                                Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
-                    
+
                     <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -190,65 +191,65 @@
                         </Grid.RowDefinitions>
 
                         <StackPanel Grid.Column="0" Grid.Row="0" Margin="0,0,8,12">
-                            <TextBlock Text="Tenant ID" FontSize="12" Margin="0,0,0,4" 
+                            <TextBlock Text="Tenant ID" FontSize="12" Margin="0,0,0,4"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                             <TextBox x:Name="TenantIdInput" Text="common"/>
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Grid.Row="0" Margin="8,0,0,12">
-                            <TextBlock Text="Client ID *" FontSize="12" Margin="0,0,0,4" 
+                            <TextBlock Text="Client ID *" FontSize="12" Margin="0,0,0,4"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                             <TextBox x:Name="ClientIdInput"/>
                         </StackPanel>
                     </Grid>
 
                     <!-- Added authentication method selector -->
-                    <TextBlock Text="AUTHENTICATION METHOD" FontSize="11" FontWeight="SemiBold" 
+                    <TextBlock Text="AUTHENTICATION METHOD" FontSize="11" FontWeight="SemiBold"
                                Foreground="{StaticResource TextSecondaryBrush}" Margin="0,8,0,8"/>
-                    
+
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                        <RadioButton x:Name="DeviceCodeRadio" Content="Device Code Flow (Recommended)" 
-                                     IsChecked="True" GroupName="AuthMethod" 
+                        <RadioButton x:Name="DeviceCodeRadio" Content="Device Code Flow (Recommended)"
+                                     IsChecked="True" GroupName="AuthMethod"
                                      Checked="AuthMethodRadio_Changed" Margin="0,0,20,0"/>
-                        <RadioButton x:Name="CredentialsRadio" Content="Username &amp; Password" 
+                        <RadioButton x:Name="CredentialsRadio" Content="Username &amp; Password"
                                      GroupName="AuthMethod" Checked="AuthMethodRadio_Changed"/>
                     </StackPanel>
 
                     <!-- Added username/password input panel (hidden by default) -->
-                    <Border x:Name="CredentialsPanel" Visibility="Collapsed" 
+                    <Border x:Name="CredentialsPanel" Visibility="Collapsed"
                             Background="#FFF3E0" CornerRadius="4" Padding="16" Margin="0,0,0,12">
                         <StackPanel>
-                            <TextBlock Text="⚠ SECURITY WARNING" FontSize="11" FontWeight="Bold" 
+                            <TextBlock Text="⚠ SECURITY WARNING" FontSize="11" FontWeight="Bold"
                                        Foreground="#E65100" Margin="0,0,0,8"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#BF360C" Margin="0,0,0,12">
-                                Username/Password authentication does NOT work with MFA-enabled accounts. 
+                                Username/Password authentication does NOT work with MFA-enabled accounts.
                                 Only use this method if MFA has been disabled or compromised during an incident.
                                 Device Code Flow is more secure and supports MFA.
                             </TextBlock>
-                            
-                            <TextBlock Text="Username (UPN)" FontSize="12" Margin="0,0,0,4" 
+
+                            <TextBlock Text="Username (UPN)" FontSize="12" Margin="0,0,0,4"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                             <TextBox x:Name="UsernameInput" Margin="0,0,0,12"/>
-                            
-                            <TextBlock Text="Password" FontSize="12" Margin="0,0,0,4" 
+
+                            <TextBlock Text="Password" FontSize="12" Margin="0,0,0,4"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                             <PasswordBox x:Name="PasswordInput" Margin="0,0,0,0"/>
                         </StackPanel>
                     </Border>
 
-                    <Button x:Name="ConnectButton" Content="Connect with Device Code" 
+                    <Button x:Name="ConnectButton" Content="Connect with Device Code"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Click="ConnectButton_Click" HorizontalAlignment="Stretch"/>
 
                     <!-- Device Code Display -->
-                    <Border x:Name="DeviceCodePanel" Visibility="Collapsed" 
+                    <Border x:Name="DeviceCodePanel" Visibility="Collapsed"
                             Background="#FFF8E1" CornerRadius="4" Padding="16" Margin="0,16,0,0">
                         <StackPanel>
-                            <TextBlock Text="ACTION REQUIRED" FontSize="11" FontWeight="Bold" 
+                            <TextBlock Text="ACTION REQUIRED" FontSize="11" FontWeight="Bold"
                                        Foreground="#FF8F00" Margin="0,0,0,8"/>
                             <TextBlock x:Name="DeviceCodeMessage" TextWrapping="Wrap" FontSize="13"
                                        Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <Button x:Name="CopyCodeButton" Content="Copy Code to Clipboard" 
+                            <Button x:Name="CopyCodeButton" Content="Copy Code to Clipboard"
                                     Style="{StaticResource SecondaryButtonStyle}"
                                     Click="CopyCodeButton_Click" Margin="0,12,0,0"/>
                         </StackPanel>
@@ -263,7 +264,7 @@
 
                     <!-- Help Text -->
                     <Expander Header="Setup Instructions" Margin="0,20,0,0" FontSize="12">
-                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" 
+                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}"
                                    FontSize="12" Margin="0,8,0,0">
                             1. Register an app in Entra ID Admin Center&#x0a;
                             2. Enable "Allow public client flows"&#x0a;
@@ -285,9 +286,9 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-                
+
                 <!-- Header with connection info -->
-                <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrush}" 
+                <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="0,0,0,1" Padding="20,12">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -298,31 +299,34 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Orientation="Horizontal" Grid.Column="0">
-                            <Ellipse x:Name="AuthStatusIndicator" Width="10" Height="10" 
+                            <Ellipse x:Name="AuthStatusIndicator" Width="10" Height="10"
                                      Fill="{StaticResource SuccessBrush}" Margin="0,0,8,0"/>
-                            <TextBlock x:Name="AuthStatusText" Text="Not connected" 
+                            <TextBlock x:Name="AuthStatusText" Text="Not connected"
                                        VerticalAlignment="Center" FontSize="13"/>
                             <!-- Added auth method indicator -->
-                            <TextBlock x:Name="AuthMethodText" Text="" 
-                                       VerticalAlignment="Center" FontSize="11" 
+                            <TextBlock x:Name="AuthMethodText" Text=""
+                                       VerticalAlignment="Center" FontSize="11"
                                        Foreground="{StaticResource TextSecondaryBrush}" Margin="12,0,0,0"/>
+                            <!-- CHANGE -->
+                            <TextBlock x:Name="TokenStatusText" FontSize="11" Margin="12,0,0,0"
+                                       Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
 
                         <!-- Added current user protection indicator -->
-                        <Border Grid.Column="1" Background="#E8F5E9" CornerRadius="4" 
+                        <Border Grid.Column="1" Background="#E8F5E9" CornerRadius="4"
                                 Padding="8,4" Margin="20,0" HorizontalAlignment="Left">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="🛡" FontSize="12" Margin="0,0,4,0"/>
-                                <TextBlock Text="Your account is protected from all mass operations" 
+                                <TextBlock Text="Your account is protected from all mass operations"
                                            FontSize="11" Foreground="#2E7D32"/>
                             </StackPanel>
                         </Border>
 
-                        <TextBlock Grid.Column="2" x:Name="StatusText" 
+                        <TextBlock Grid.Column="2" x:Name="StatusText"
                                    Text="Ready" VerticalAlignment="Center"
                                    Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"/>
 
-                        <Button x:Name="SignOutButton" Grid.Column="3" Content="Sign Out" 
+                        <Button x:Name="SignOutButton" Grid.Column="3" Content="Sign Out"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 Click="SignOutButton_Click" Visibility="Collapsed" Margin="16,0,0,0"/>
                     </Grid>
@@ -342,20 +346,20 @@
                                 <StackPanel>
                                     <TextBlock Text="Single User Token Revocation" FontSize="18" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
-                                    <TextBlock Text="Revoke all refresh tokens and sign-in sessions for a specific user" 
-                                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" 
+                                    <TextBlock Text="Revoke all refresh tokens and sign-in sessions for a specific user"
+                                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
                                                Margin="0,0,0,20" TextWrapping="Wrap"/>
 
-                                    <TextBlock Text="User Identifier" FontSize="12" Margin="0,0,0,4" 
+                                    <TextBlock Text="User Identifier" FontSize="12" Margin="0,0,0,4"
                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="SingleUserInput" Grid.Column="0" 
+                                        <TextBox x:Name="SingleUserInput" Grid.Column="0"
                                                  ToolTip="Enter User Principal Name (email) or Object ID"/>
-                                        <Button Grid.Column="1" Content="Look Up" 
+                                        <Button Grid.Column="1" Content="Look Up"
                                                 Style="{StaticResource SecondaryButtonStyle}"
                                                 Click="LookupUserButton_Click" Margin="8,0,0,0"/>
                                     </Grid>
@@ -369,21 +373,21 @@
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
                                             <Ellipse Grid.Column="0" Width="48" Height="48" Fill="{StaticResource PrimaryBrush}"/>
-                                            <TextBlock Grid.Column="0" x:Name="UserInitials" 
+                                            <TextBlock Grid.Column="0" x:Name="UserInitials"
                                                        Text="JD" FontSize="18" FontWeight="Bold" Foreground="White"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             <StackPanel Grid.Column="1" Margin="16,0,0,0">
                                                 <TextBlock x:Name="UserDisplayName" FontSize="15" FontWeight="SemiBold"
                                                            Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                <TextBlock x:Name="UserEmail" FontSize="13" 
+                                                <TextBlock x:Name="UserEmail" FontSize="13"
                                                            Foreground="{StaticResource TextSecondaryBrush}"/>
-                                                <TextBlock x:Name="UserDepartment" FontSize="12" 
+                                                <TextBlock x:Name="UserDepartment" FontSize="12"
                                                            Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
 
-                                    <Button x:Name="RevokeSingleButton" Content="Revoke User Tokens" 
+                                    <Button x:Name="RevokeSingleButton" Content="Revoke User Tokens"
                                             Style="{StaticResource DangerButtonStyle}"
                                             Click="RevokeSingleButton_Click" Margin="0,20,0,0"
                                             HorizontalAlignment="Left"/>
@@ -409,18 +413,18 @@
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                                 <TextBlock Text="⚠" FontSize="18" Foreground="{StaticResource DangerBrush}" Margin="0,0,8,0"/>
-                                                <TextBlock Text="DANGEROUS OPERATION" FontWeight="Bold" 
+                                                <TextBlock Text="DANGEROUS OPERATION" FontWeight="Bold"
                                                            Foreground="{StaticResource DangerBrush}" FontSize="13"/>
                                             </StackPanel>
-                                            <TextBlock Text="This will revoke tokens for ALL users except your account. All users will be forced to re-authenticate." 
+                                            <TextBlock Text="This will revoke tokens for ALL users except your account. All users will be forced to re-authenticate."
                                                        TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
                                         </StackPanel>
                                     </Border>
 
                                     <TextBlock Text="Mass Token Revocation" FontSize="18" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
-                                    <TextBlock Text="Revoke all tokens for every user in the tenant (except current user)" 
-                                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" 
+                                    <TextBlock Text="Revoke all tokens for every user in the tenant (except current user)"
+                                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
                                                Margin="0,0,0,20" TextWrapping="Wrap"/>
 
                                     <Grid Margin="0,0,0,16">
@@ -444,11 +448,11 @@
 
                                     <!-- Confirmation Checkbox -->
                                     <CheckBox x:Name="MassRevocationConfirmation" Margin="0,0,0,16">
-                                        <TextBlock Text="I understand this will affect ALL users and confirm this action" 
+                                        <TextBlock Text="I understand this will affect ALL users and confirm this action"
                                                    FontSize="13" TextWrapping="Wrap"/>
                                     </CheckBox>
 
-                                    <Button x:Name="MassRevokeButton" Content="Start Mass Revocation" 
+                                    <Button x:Name="MassRevokeButton" Content="Start Mass Revocation"
                                             Style="{StaticResource DangerButtonStyle}"
                                             Click="MassRevokeButton_Click" HorizontalAlignment="Left"
                                             IsEnabled="False"/>
@@ -517,18 +521,18 @@
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                                 <TextBlock Text="⚠" FontSize="18" Foreground="#E65100" Margin="0,0,8,0"/>
-                                                <TextBlock Text="CRITICAL SECURITY OPERATION" FontWeight="Bold" 
+                                                <TextBlock Text="CRITICAL SECURITY OPERATION" FontWeight="Bold"
                                                            Foreground="#E65100" FontSize="13"/>
                                             </StackPanel>
-                                            <TextBlock Text="This will reset MFA for ALL users except your account. All users will need to re-register their authentication methods (Authenticator app, phone, security keys, etc.)." 
+                                            <TextBlock Text="This will reset MFA for ALL users except your account. All users will need to re-register their authentication methods (Authenticator app, phone, security keys, etc.)."
                                                        TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
                                         </StackPanel>
                                     </Border>
 
                                     <TextBlock Text="Mass MFA Reset" FontSize="18" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
-                                    <TextBlock Text="Remove all authentication methods (except password) for every user in the tenant" 
-                                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" 
+                                    <TextBlock Text="Remove all authentication methods (except password) for every user in the tenant"
+                                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
                                                Margin="0,0,0,20" TextWrapping="Wrap"/>
 
                                     <!-- MFA Methods to Remove -->
@@ -567,15 +571,15 @@
 
                                     <!-- Double Confirmation -->
                                     <CheckBox x:Name="MfaResetConfirmation1" Margin="0,0,0,8">
-                                        <TextBlock Text="I understand this will remove all MFA methods for ALL users" 
+                                        <TextBlock Text="I understand this will remove all MFA methods for ALL users"
                                                    FontSize="13" TextWrapping="Wrap"/>
                                     </CheckBox>
                                     <CheckBox x:Name="MfaResetConfirmation2" Margin="0,0,0,16">
-                                        <TextBlock Text="I have verified this action is necessary and authorized" 
+                                        <TextBlock Text="I have verified this action is necessary and authorized"
                                                    FontSize="13" TextWrapping="Wrap"/>
                                     </CheckBox>
 
-                                    <Button x:Name="MassMfaResetButton" Content="Start Mass MFA Reset" 
+                                    <Button x:Name="MassMfaResetButton" Content="Start Mass MFA Reset"
                                             Style="{StaticResource DangerButtonStyle}"
                                             Click="MassMfaResetButton_Click" HorizontalAlignment="Left"
                                             IsEnabled="False"/>
@@ -652,22 +656,22 @@
                                             <StackPanel>
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                                     <TextBlock Text="⚠" FontSize="18" Foreground="#E65100" Margin="0,0,8,0"/>
-                                                    <TextBlock Text="APPLICATION CLEANUP" FontWeight="Bold" 
+                                                    <TextBlock Text="APPLICATION CLEANUP" FontWeight="Bold"
                                                                Foreground="#E65100" FontSize="13"/>
                                                 </StackPanel>
-                                                <TextBlock Text="Delete enterprise applications (service principals) and optionally their app registrations. Deleted apps are recoverable for 30 days." 
+                                                <TextBlock Text="Delete enterprise applications (service principals) and optionally their app registrations. Deleted apps are recoverable for 30 days."
                                                            TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
                                             </StackPanel>
                                         </Border>
 
                                         <TextBlock Text="Enterprise Application Cleanup" FontSize="18" FontWeight="SemiBold"
                                                    Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
-                                        <TextBlock Text="Remove enterprise applications and app registrations from your tenant" 
-                                                   FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" 
+                                        <TextBlock Text="Remove enterprise applications and app registrations from your tenant"
+                                                   FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
                                                    Margin="0,0,0,20" TextWrapping="Wrap"/>
 
                                         <!-- Current App Info -->
-                                        <TextBlock Text="CURRENT APPLICATION" FontSize="11" FontWeight="SemiBold" 
+                                        <TextBlock Text="CURRENT APPLICATION" FontSize="11" FontWeight="SemiBold"
                                                    Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
                                         <Border Background="#E3F2FD" CornerRadius="4" Padding="16" Margin="0,0,0,20">
                                             <Grid>
@@ -678,26 +682,26 @@
                                                 <StackPanel Grid.Column="0">
                                                     <TextBlock x:Name="CurrentAppName" Text="Not loaded" FontSize="14" FontWeight="SemiBold"
                                                                Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                    <TextBlock x:Name="CurrentAppId" Text="" FontSize="12" 
+                                                    <TextBlock x:Name="CurrentAppId" Text="" FontSize="12"
                                                                Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
                                                 </StackPanel>
-                                                <Button Grid.Column="1" x:Name="DeleteCurrentAppButton" Content="Delete This App" 
+                                                <Button Grid.Column="1" x:Name="DeleteCurrentAppButton" Content="Delete This App"
                                                         Style="{StaticResource DangerButtonStyle}"
                                                         Click="DeleteCurrentAppButton_Click" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
 
                                         <!-- Single App Deletion -->
-                                        <TextBlock Text="DELETE SINGLE APPLICATION" FontSize="11" FontWeight="SemiBold" 
+                                        <TextBlock Text="DELETE SINGLE APPLICATION" FontSize="11" FontWeight="SemiBold"
                                                    Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
                                         <Grid Margin="0,0,0,8">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBox x:Name="AppIdToDeleteInput" Grid.Column="0" 
+                                            <TextBox x:Name="AppIdToDeleteInput" Grid.Column="0"
                                                      ToolTip="Enter Application (Client) ID to delete"/>
-                                            <Button Grid.Column="1" Content="Delete App" 
+                                            <Button Grid.Column="1" Content="Delete App"
                                                     Style="{StaticResource DangerButtonStyle}"
                                                     Click="DeleteSingleAppButton_Click" Margin="8,0,0,0"/>
                                         </Grid>
@@ -722,16 +726,16 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="ENTERPRISE APPLICATIONS IN TENANT" FontSize="11" FontWeight="SemiBold" 
+                                            <TextBlock Grid.Column="0" Text="ENTERPRISE APPLICATIONS IN TENANT" FontSize="11" FontWeight="SemiBold"
                                                        Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                            <Button Grid.Column="1" x:Name="LoadAppsButton" Content="Load Apps" 
+                                            <Button Grid.Column="1" x:Name="LoadAppsButton" Content="Load Apps"
                                                     Style="{StaticResource SecondaryButtonStyle}"
                                                     Click="LoadAppsButton_Click"/>
                                         </Grid>
 
                                         <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,0,0,16">
-                                            <DataGrid x:Name="EnterpriseAppsDataGrid" 
-                                                      AutoGenerateColumns="False" 
+                                            <DataGrid x:Name="EnterpriseAppsDataGrid"
+                                                      AutoGenerateColumns="False"
                                                       IsReadOnly="True"
                                                       Height="200"
                                                       HeadersVisibility="Column"
@@ -740,7 +744,7 @@
                                                       SelectionMode="Extended"
                                                       CanUserResizeRows="False">
                                                 <DataGrid.Columns>
-                                                    <DataGridCheckBoxColumn Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                                    <DataGridCheckBoxColumn Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                             Header="" Width="40"/>
                                                     <DataGridTextColumn Binding="{Binding DisplayName}" Header="Name" Width="*"/>
                                                     <DataGridTextColumn Binding="{Binding ApplicationId}" Header="App ID" Width="280"/>
@@ -751,11 +755,11 @@
 
                                         <!-- Mass Delete Section -->
                                         <CheckBox x:Name="MassAppDeleteConfirmation" Margin="0,0,0,12">
-                                            <TextBlock Text="I confirm I want to delete the selected enterprise applications" 
+                                            <TextBlock Text="I confirm I want to delete the selected enterprise applications"
                                                        FontSize="13" TextWrapping="Wrap"/>
                                         </CheckBox>
 
-                                        <Button x:Name="MassDeleteAppsButton" Content="Delete Selected Apps" 
+                                        <Button x:Name="MassDeleteAppsButton" Content="Delete Selected Apps"
                                                 Style="{StaticResource DangerButtonStyle}"
                                                 Click="MassDeleteAppsButton_Click" HorizontalAlignment="Left"
                                                 IsEnabled="False"/>
@@ -824,7 +828,7 @@
                             </Border>
                         </TabItem>
 
-                        <!-- Added Backdoor Detection Tab -->
+                        <!-- Backdoor Detection Tab -->
                         <TabItem Header="Backdoor Detection">
                             <Border Style="{StaticResource CardStyle}" Margin="0,16,0,0">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -834,18 +838,18 @@
                                             <StackPanel>
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                                     <TextBlock Text="🔍" FontSize="18" Margin="0,0,8,0"/>
-                                                    <TextBlock Text="ENTRA ID BACKDOOR DETECTION" FontWeight="Bold" 
+                                                    <TextBlock Text="ENTRA ID BACKDOOR DETECTION" FontWeight="Bold"
                                                                Foreground="{StaticResource PrimaryBrush}" FontSize="13"/>
                                                 </StackPanel>
-                                                <TextBlock Text="Scan your tenant for known backdoor techniques based on Mandiant's research on AADInternals attacks including federation backdoors, rogue PTA agents, and suspicious OAuth grants." 
+                                                <TextBlock Text="Scan your tenant for known backdoor techniques based on Mandiant's research on AADInternals attacks including federation backdoors, rogue PTA agents, and suspicious OAuth grants."
                                                            TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
                                             </StackPanel>
                                         </Border>
 
                                         <TextBlock Text="Backdoor Detection Scanner" FontSize="18" FontWeight="SemiBold"
                                                    Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
-                                        <TextBlock Text="Detect federation backdoors, suspicious PTA agents, high-privilege apps, and OAuth consent attacks" 
-                                                   FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" 
+                                        <TextBlock Text="Detect federation backdoors, suspicious PTA agents, high-privilege apps, and OAuth consent attacks"
+                                                   FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
                                                    Margin="0,0,0,20" TextWrapping="Wrap"/>
 
                                         <!-- Scan Types -->
@@ -872,15 +876,10 @@
                                         </Border>
 
                                         <!-- Known Internal IPs for PTA Validation -->
-                                        <TextBlock Text="KNOWN INTERNAL IPs (for PTA agent validation)" FontSize="11" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
-                                        <TextBox x:Name="KnownInternalIpsInput" Height="60" TextWrapping="Wrap" AcceptsReturn="True"
-                                                 ToolTip="Enter known WAN IP addresses of your organization (one per line). PTA agents from other IPs will be flagged as suspicious."/>
-                                        <TextBlock Text="Enter your organization's WAN IP addresses, one per line. PTA agents from unknown IPs will be flagged." 
-                                                   FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,16"/>
+                                        <!-- Removed Known Internal IPs input - all agents now shown for manual review -->
 
                                         <!-- Run Scan Button -->
-                                        <Button x:Name="RunBackdoorScanButton" Content="Run Backdoor Detection Scan" 
+                                        <Button x:Name="RunBackdoorScanButton" Content="Run Backdoor Detection Scan"
                                                 Style="{StaticResource PrimaryButtonStyle}"
                                                 Click="RunBackdoorScanButton_Click" HorizontalAlignment="Left"/>
 
@@ -947,7 +946,7 @@
                                                            Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12"/>
 
                                                 <!-- Export Button -->
-                                                <Button x:Name="ExportFindingsButton" Content="Export Findings to JSON" 
+                                                <Button x:Name="ExportFindingsButton" Content="Export Findings to JSON"
                                                         Style="{StaticResource SecondaryButtonStyle}"
                                                         Click="ExportFindingsButton_Click" HorizontalAlignment="Left"/>
                                             </StackPanel>
@@ -956,9 +955,9 @@
                                         <!-- Findings List -->
                                         <TextBlock x:Name="FindingsHeader" Text="FINDINGS" FontSize="11" FontWeight="SemiBold"
                                                    Foreground="{StaticResource TextSecondaryBrush}" Margin="0,20,0,8" Visibility="Collapsed"/>
-                                        <Border x:Name="FindingsListBorder" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" 
+                                        <Border x:Name="FindingsListBorder" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4"
                                                 Margin="0,0,0,16" Visibility="Collapsed">
-                                            <ListView x:Name="FindingsListView" 
+                                            <ListView x:Name="FindingsListView"
                                                       Height="300"
                                                       BorderThickness="0"
                                                       SelectionChanged="FindingsListView_SelectionChanged">
@@ -970,12 +969,12 @@
                                                                     <ColumnDefinition Width="Auto"/>
                                                                     <ColumnDefinition Width="*"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <Border Grid.Column="0" Width="8" Height="8" CornerRadius="4" 
+                                                                <Border Grid.Column="0" Width="8" Height="8" CornerRadius="4"
                                                                         Background="{Binding SeverityColor}" Margin="0,4,12,0" VerticalAlignment="Top"/>
                                                                 <StackPanel Grid.Column="1">
                                                                     <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13"
                                                                                Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                                    <TextBlock Text="{Binding TypeDisplay}" FontSize="11" 
+                                                                    <TextBlock Text="{Binding TypeDisplay}" FontSize="11"
                                                                                Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0"/>
                                                                 </StackPanel>
                                                             </Grid>
@@ -987,7 +986,7 @@
 
                                         <!-- Selected Finding Details -->
                                         <Border x:Name="FindingDetailsPanel" Visibility="Collapsed"
-                                                Background="White" CornerRadius="4" Padding="16" 
+                                                Background="White" CornerRadius="4" Padding="16"
                                                 BorderBrush="#E0E0E0" BorderThickness="1">
                                             <StackPanel>
                                                 <Grid Margin="0,0,0,12">
@@ -995,11 +994,11 @@
                                                         <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <Border x:Name="FindingSeverityBadge" Grid.Column="0" 
+                                                    <Border x:Name="FindingSeverityBadge" Grid.Column="0"
                                                             CornerRadius="4" Padding="8,4" Margin="0,0,12,0">
                                                         <TextBlock x:Name="FindingSeverityText" FontSize="11" FontWeight="Bold" Foreground="White"/>
                                                     </Border>
-                                                    <TextBlock x:Name="FindingMitreTechnique" Grid.Column="1" FontSize="11" 
+                                                    <TextBlock x:Name="FindingMitreTechnique" Grid.Column="1" FontSize="11"
                                                                Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                                                 </Grid>
 
@@ -1036,19 +1035,40 @@
                                                     </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
 
+                                                <!-- Generic Remediation Panel for all remediatable backdoors -->
+                                                <Border x:Name="RemediationPanel" Visibility="Collapsed"
+                                                        Background="#E3F2FD" CornerRadius="4" Padding="16" Margin="0,0,0,12">
+                                                    <StackPanel>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                            <TextBlock Text="🔧" FontSize="16" Margin="0,0,8,0"/>
+                                                            <TextBlock x:Name="RemediationTitle" Text="REMEDIATE FINDING" FontSize="12" FontWeight="Bold"
+                                                                       Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                        <TextBlock x:Name="RemediationDescription"
+                                                                   FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                                        <CheckBox x:Name="ConfirmRemediationCheckbox" Margin="0,0,0,12" Checked="ConfirmRemediationCheckbox_Changed" Unchecked="ConfirmRemediationCheckbox_Changed">
+                                                            <TextBlock x:Name="RemediationConfirmText" Text="I understand and want to proceed with remediation"
+                                                                       FontSize="12" TextWrapping="Wrap"/>
+                                                        </CheckBox>
+                                                        <Button x:Name="RemediateButton" Content="Remediate"
+                                                                Style="{StaticResource PrimaryButtonStyle}" Padding="16,8"
+                                                                Click="RemediateButton_Click" IsEnabled="False"/>
+                                                    </StackPanel>
+                                                </Border>
+
                                                 <!-- Add Revoke Federation Backdoor button and panel -->
                                                 <Border x:Name="RevokeFederationPanel" Visibility="Collapsed"
                                                         Background="#FFEBEE" CornerRadius="4" Padding="16" Margin="0,0,0,12">
                                                     <StackPanel>
                                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                                             <TextBlock Text="⚠" FontSize="16" Foreground="#D32F2F" Margin="0,0,8,0"/>
-                                                            <TextBlock Text="REVOKE FEDERATION BACKDOOR" FontSize="12" FontWeight="Bold" 
+                                                            <TextBlock Text="REVOKE FEDERATION BACKDOOR" FontSize="12" FontWeight="Bold"
                                                                        Foreground="#D32F2F" VerticalAlignment="Center"/>
                                                         </StackPanel>
-                                                        <TextBlock Text="This will delete the federation configuration for this domain, converting it back to managed authentication. This action cannot be undone easily - you would need to reconfigure federation manually." 
+                                                        <TextBlock Text="This will delete the federation configuration for this domain, converting it back to managed authentication. This action cannot be undone easily - you would need to reconfigure federation manually."
                                                                    FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                                                         <CheckBox x:Name="ConfirmRevokeFederationCheckbox" Margin="0,0,0,12">
-                                                            <TextBlock Text="I understand this will remove the federation trust and force users to authenticate via Entra ID directly" 
+                                                            <TextBlock Text="I understand this will remove the federation trust and force users to authenticate via Entra ID directly"
                                                                        FontSize="12" TextWrapping="Wrap"/>
                                                         </CheckBox>
                                                         <Button x:Name="RevokeFederationButton" Content="Revoke Federation Configuration"
@@ -1057,33 +1077,655 @@
                                                     </StackPanel>
                                                 </Border>
 
-                                                <!-- Mass Revoke All Federation Backdoors -->
-                                                <Border x:Name="MassRevokeFederationPanel" Visibility="Collapsed"
-                                                        Background="#FCE4EC" CornerRadius="4" Padding="16">
+                                                <!-- Mass Remediate All Backdoors Panel -->
+                                                <Border x:Name="MassRemediateAllPanel" Visibility="Collapsed"
+                                                        Background="#FBE9E7" CornerRadius="4" Padding="16">
                                                     <StackPanel>
                                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                                            <TextBlock Text="🛡" FontSize="16" Margin="0,0,8,0"/>
-                                                            <TextBlock Text="MASS REVOKE ALL FEDERATION BACKDOORS" FontSize="12" FontWeight="Bold" 
-                                                                       Foreground="#C2185B" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="⚡" FontSize="16" Margin="0,0,8,0"/>
+                                                            <TextBlock Text="MASS REMEDIATE ALL BACKDOORS" FontSize="12" FontWeight="Bold"
+                                                                       Foreground="#BF360C" VerticalAlignment="Center"/>
                                                         </StackPanel>
-                                                        <TextBlock x:Name="MassRevokeFederationCount" 
+                                                        <TextBlock x:Name="MassRemediateAllCount"
                                                                    FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                                                        <TextBlock Text="This will revoke ALL detected federation backdoors in a single operation. Only use this during active incident response when you need to quickly eliminate attacker persistence." 
+                                                        <TextBlock Text="This will automatically remediate ALL detected backdoors that support automated remediation. This includes federation backdoors, MFA bypass configs, secondary certificates, malicious apps, and OAuth grants."
                                                                    FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12"/>
-                                                        <CheckBox x:Name="ConfirmMassRevokeFederation1" Margin="0,0,0,4">
+                                                        <CheckBox x:Name="ConfirmMassRemediateAll1" Margin="0,0,0,4" Checked="ConfirmMassRemediateAll_Changed" Unchecked="ConfirmMassRemediateAll_Changed">
                                                             <TextBlock Text="I am responding to an active security incident" FontSize="12"/>
                                                         </CheckBox>
-                                                        <CheckBox x:Name="ConfirmMassRevokeFederation2" Margin="0,0,0,12">
-                                                            <TextBlock Text="I understand this will remove ALL suspicious federation trusts" FontSize="12"/>
+                                                        <CheckBox x:Name="ConfirmMassRemediateAll2" Margin="0,0,0,4" Checked="ConfirmMassRemediateAll_Changed" Unchecked="ConfirmMassRemediateAll_Changed">
+                                                            <TextBlock Text="I understand this will modify tenant configuration" FontSize="12"/>
                                                         </CheckBox>
-                                                        <Button x:Name="MassRevokeFederationButton" Content="Revoke All Federation Backdoors"
-                                                                Background="#C2185B" Foreground="White" Padding="16,8"
-                                                                Click="MassRevokeFederationButton_Click" IsEnabled="False"/>
-                                                    
-                                                        <!-- Progress panel for mass revocation -->
-                                                        <StackPanel x:Name="MassRevokeFederationProgress" Visibility="Collapsed" Margin="0,16,0,0">
-                                                            <TextBlock x:Name="MassRevokeFederationProgressText" FontSize="12" Margin="0,0,0,8"/>
-                                                            <ProgressBar x:Name="MassRevokeFederationProgressBar" Height="8"/>
+                                                        <CheckBox x:Name="ConfirmMassRemediateAll3" Margin="0,0,0,12" Checked="ConfirmMassRemediateAll_Changed" Unchecked="ConfirmMassRemediateAll_Changed">
+                                                            <TextBlock Text="I have documented this action for audit purposes" FontSize="12"/>
+                                                        </CheckBox>
+                                                        <Button x:Name="MassRemediateAllButton" Content="Remediate All Backdoors"
+                                                                Background="#BF360C" Foreground="White" Padding="16,8"
+                                                                Click="MassRemediateAllButton_Click" IsEnabled="False"/>
+
+                                                        <!-- Progress panel for mass remediation -->
+                                                        <StackPanel x:Name="MassRemediateAllProgress" Visibility="Collapsed" Margin="0,16,0,0">
+                                                            <TextBlock x:Name="MassRemediateAllProgressText" FontSize="12" Margin="0,0,0,8"/>
+                                                            <ProgressBar x:Name="MassRemediateAllProgressBar" Height="8"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+                        </TabItem>
+
+                        <!-- Risky Accounts Tab -->
+                        <TabItem Header="Risky Accounts">
+                            <Border Style="{StaticResource CardStyle}" Margin="0,16,0,0">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <!-- Header -->
+                                    <StackPanel Grid.Row="0">
+                                        <TextBlock Text="Risky Account Detection" FontSize="18" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Detect accounts with suspicious password configurations including 1601 epoch timestamps (password never set), stale passwords, and other risk indicators"
+                                                   FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Margin="0,0,0,16" TextWrapping="Wrap"/>
+                                        
+                                        <Grid Margin="0,0,0,16">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            
+                                            <Button x:Name="ScanRiskyAccountsButton" Grid.Column="0"
+                                                    Content="Scan for Risky Accounts"
+                                                    Style="{StaticResource PrimaryButtonStyle}"
+                                                    Click="ScanRiskyAccountsButton_Click"/>
+                                            
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                <TextBlock x:Name="RiskyAccountsScanStatus" 
+                                                           Text="" FontSize="12"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                    
+                                    <!-- Risk Summary Panel -->
+                                    <Border x:Name="RiskSummaryPanel" Grid.Row="1" Visibility="Collapsed"
+                                            Background="#FEF2F2" BorderBrush="#FECACA" BorderThickness="1"
+                                            CornerRadius="6" Padding="16" Margin="0,0,0,16">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            
+                                            <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                                <TextBlock x:Name="RiskyCriticalCount" Text="0" FontSize="28" FontWeight="Bold"
+                                                           Foreground="#DC2626" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Critical" FontSize="12" Foreground="#DC2626"
+                                                           HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                            
+                                            <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                                <TextBlock x:Name="RiskyHighCount" Text="0" FontSize="28" FontWeight="Bold"
+                                                           Foreground="#EA580C" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="High" FontSize="12" Foreground="#EA580C"
+                                                           HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                            
+                                            <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                                <TextBlock x:Name="RiskyMediumCount" Text="0" FontSize="28" FontWeight="Bold"
+                                                           Foreground="#CA8A04" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Medium" FontSize="12" Foreground="#CA8A04"
+                                                           HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                            
+                                            <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                                <TextBlock x:Name="RiskyTotalScanned" Text="0" FontSize="28" FontWeight="Bold"
+                                                           Foreground="#6B7280" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Scanned" FontSize="12" Foreground="#6B7280"
+                                                           HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                    
+                                    <!-- Risky Accounts List -->
+                                    <ListView x:Name="RiskyAccountsListView" Grid.Row="2"
+                                              BorderThickness="1" BorderBrush="#E5E7EB"
+                                              SelectionMode="Extended">
+                                        <ListView.View>
+                                            <GridView>
+                                                <GridViewColumn Header="Severity" Width="80">
+                                                    <GridViewColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Border Background="{Binding SeverityColor}" 
+                                                                    CornerRadius="3" Padding="6,2">
+                                                                <TextBlock Text="{Binding Severity}" 
+                                                                           Foreground="White" FontSize="11"
+                                                                           FontWeight="SemiBold"/>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </GridViewColumn.CellTemplate>
+                                                </GridViewColumn>
+                                                <GridViewColumn Header="Display Name" Width="180"
+                                                                DisplayMemberBinding="{Binding DisplayName}"/>
+                                                <GridViewColumn Header="UPN" Width="220"
+                                                                DisplayMemberBinding="{Binding UserPrincipalName}"/>
+                                                <GridViewColumn Header="Password Last Set" Width="160"
+                                                                DisplayMemberBinding="{Binding PasswordLastSetDisplay}"/>
+                                                <GridViewColumn Header="Status" Width="80"
+                                                                DisplayMemberBinding="{Binding AccountStatusDisplay}"/>
+                                                <GridViewColumn Header="Risk Reason" Width="280"
+                                                                DisplayMemberBinding="{Binding RiskReason}"/>
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+                                    
+                                    <!-- Remediation Panel -->
+                                    <Border Grid.Row="3" Background="#F9FAFB" CornerRadius="6" 
+                                            Padding="16" Margin="0,16,0,0">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Bulk Remediation" FontSize="14" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                                                <CheckBox x:Name="RiskyForcePasswordResetCheck" 
+                                                          Content="Force password reset on next sign-in"
+                                                          Margin="0,0,0,4"/>
+                                                <CheckBox x:Name="RiskyDisableAccountCheck" 
+                                                          Content="Disable account"
+                                                          Margin="0,0,0,8"/>
+                                                <TextBlock Text="Your account is protected from bulk operations"
+                                                           FontSize="11" Foreground="#059669" FontStyle="Italic"/>
+                                            </StackPanel>
+                                            
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <Button x:Name="RemediateSelectedRiskyButton"
+                                                        Content="Remediate Selected"
+                                                        Style="{StaticResource DangerButtonStyle}"
+                                                        Click="RemediateSelectedRiskyButton_Click"
+                                                        Margin="0,0,0,8"/>
+                                                <Button x:Name="RemediateAllCriticalButton"
+                                                        Content="Remediate All Critical"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Click="RemediateAllCriticalButton_Click"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </TabItem>
+                        
+                        <TabItem Header="App Cleanup">
+                            <Border Style="{StaticResource CardStyle}" Margin="0,16,0,0">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel>
+                                        <Border Background="#FFF3E0" CornerRadius="4" Padding="16" Margin="0,0,0,20">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                    <TextBlock Text="⚠" FontSize="18" Foreground="#E65100" Margin="0,0,8,0"/>
+                                                    <TextBlock Text="APPLICATION CLEANUP" FontWeight="Bold"
+                                                               Foreground="#E65100" FontSize="13"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Delete enterprise applications (service principals) and optionally their app registrations. Deleted apps are recoverable for 30 days."
+                                                           TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <TextBlock Text="Enterprise Application Cleanup" FontSize="18" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Remove enterprise applications and app registrations from your tenant"
+                                                   FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Margin="0,0,0,20" TextWrapping="Wrap"/>
+
+                                        <!-- Current App Info -->
+                                        <TextBlock Text="CURRENT APPLICATION" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+                                        <Border Background="#E3F2FD" CornerRadius="4" Padding="16" Margin="0,0,0,20">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock x:Name="CurrentAppName" Text="Not loaded" FontSize="14" FontWeight="SemiBold"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                    <TextBlock x:Name="CurrentAppId" Text="" FontSize="12"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" x:Name="DeleteCurrentAppButton" Content="Delete This App"
+                                                        Style="{StaticResource DangerButtonStyle}"
+                                                        Click="DeleteCurrentAppButton_Click" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Single App Deletion -->
+                                        <TextBlock Text="DELETE SINGLE APPLICATION" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="AppIdToDeleteInput" Grid.Column="0"
+                                                     ToolTip="Enter Application (Client) ID to delete"/>
+                                            <Button Grid.Column="1" Content="Delete App"
+                                                    Style="{StaticResource DangerButtonStyle}"
+                                                    Click="DeleteSingleAppButton_Click" Margin="8,0,0,0"/>
+                                        </Grid>
+
+                                        <CheckBox x:Name="DeleteAppRegistrationCheckbox" IsChecked="True" Margin="0,0,0,20">
+                                            <TextBlock Text="Also delete the app registration (not just the service principal)" FontSize="13"/>
+                                        </CheckBox>
+
+                                        <!-- App Deletion Result -->
+                                        <Border x:Name="AppDeleteResultPanel" Visibility="Collapsed"
+                                                CornerRadius="4" Padding="16" Margin="0,0,0,20">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock x:Name="AppDeleteResultIcon" FontSize="18" Margin="0,0,12,0"/>
+                                                <TextBlock x:Name="AppDeleteResultText" FontSize="13" VerticalAlignment="Center"
+                                                           TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Enterprise Apps List -->
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="ENTERPRISE APPLICATIONS IN TENANT" FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="1" x:Name="LoadAppsButton" Content="Load Apps"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Click="LoadAppsButton_Click"/>
+                                        </Grid>
+
+                                        <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,0,0,16">
+                                            <DataGrid x:Name="EnterpriseAppsDataGrid"
+                                                      AutoGenerateColumns="False"
+                                                      IsReadOnly="True"
+                                                      Height="200"
+                                                      HeadersVisibility="Column"
+                                                      GridLinesVisibility="Horizontal"
+                                                      BorderThickness="0"
+                                                      SelectionMode="Extended"
+                                                      CanUserResizeRows="False">
+                                                <DataGrid.Columns>
+                                                    <DataGridCheckBoxColumn Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                            Header="" Width="40"/>
+                                                    <DataGridTextColumn Binding="{Binding DisplayName}" Header="Name" Width="*"/>
+                                                    <DataGridTextColumn Binding="{Binding ApplicationId}" Header="App ID" Width="280"/>
+                                                    <DataGridTextColumn Binding="{Binding CreatedDateTime, StringFormat='{}{0:yyyy-MM-dd}'}" Header="Created" Width="100"/>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </Border>
+
+                                        <!-- Mass Delete Section -->
+                                        <CheckBox x:Name="MassAppDeleteConfirmation" Margin="0,0,0,12">
+                                            <TextBlock Text="I confirm I want to delete the selected enterprise applications"
+                                                       FontSize="13" TextWrapping="Wrap"/>
+                                        </CheckBox>
+
+                                        <Button x:Name="MassDeleteAppsButton" Content="Delete Selected Apps"
+                                                Style="{StaticResource DangerButtonStyle}"
+                                                Click="MassDeleteAppsButton_Click" HorizontalAlignment="Left"
+                                                IsEnabled="False"/>
+
+                                        <!-- Mass Delete Progress -->
+                                        <StackPanel x:Name="AppCleanupProgressPanel" Visibility="Collapsed" Margin="0,20,0,0">
+                                            <Grid Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="AppCleanupProgressText" Text="Processing..." FontSize="13"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <TextBlock x:Name="AppCleanupProgressPercent" Grid.Column="1" FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                            </Grid>
+                                            <ProgressBar x:Name="AppCleanupProgressBar" Height="8"/>
+                                            <TextBlock x:Name="AppCleanupCurrentApp" FontSize="12" Margin="0,8,0,0"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        </StackPanel>
+
+                                        <!-- Mass Delete Results -->
+                                        <Border x:Name="AppCleanupResultsPanel" Visibility="Collapsed"
+                                                Background="#F5F5F5" CornerRadius="4" Padding="16" Margin="0,20,0,0">
+                                            <StackPanel>
+                                                <TextBlock Text="CLEANUP RESULTS" FontSize="11" FontWeight="Bold"
+                                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12"/>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                                        <TextBlock x:Name="AppCleanupTotalCount" Text="0" FontSize="24" FontWeight="Bold"
+                                                                   Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="Total" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                                        <TextBlock x:Name="AppCleanupSuccessCount" Text="0" FontSize="24" FontWeight="Bold"
+                                                                   Foreground="{StaticResource SuccessBrush}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="Success" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                                        <TextBlock x:Name="AppCleanupFailedCount" Text="0" FontSize="24" FontWeight="Bold"
+                                                                   Foreground="{StaticResource DangerBrush}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="Failed" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                                        <TextBlock x:Name="AppCleanupMethodsRemovedCount" Text="0" FontSize="24" FontWeight="Bold"
+                                                                   Foreground="{StaticResource PrimaryBrush}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="Methods" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                                <TextBlock x:Name="AppCleanupDuration" Margin="0,12,0,0" FontSize="12"
+                                                           Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+                        </TabItem>
+
+                        <!-- Backdoor Detection Tab -->
+                        <TabItem Header="Backdoor Detection">
+                            <Border Style="{StaticResource CardStyle}" Margin="0,16,0,0">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel>
+                                        <!-- Header Warning -->
+                                        <Border Background="#E3F2FD" CornerRadius="4" Padding="16" Margin="0,0,0,20">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                    <TextBlock Text="🔍" FontSize="18" Margin="0,0,8,0"/>
+                                                    <TextBlock Text="ENTRA ID BACKDOOR DETECTION" FontWeight="Bold"
+                                                               Foreground="{StaticResource PrimaryBrush}" FontSize="13"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Scan your tenant for known backdoor techniques based on Mandiant's research on AADInternals attacks including federation backdoors, rogue PTA agents, and suspicious OAuth grants."
+                                                           TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <TextBlock Text="Backdoor Detection Scanner" FontSize="18" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Detect federation backdoors, suspicious PTA agents, high-privilege apps, and OAuth consent attacks"
+                                                   FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Margin="0,0,0,20" TextWrapping="Wrap"/>
+
+                                        <!-- Scan Types -->
+                                        <TextBlock Text="SCAN COMPONENTS" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+                                        <Border Background="#F5F5F5" CornerRadius="4" Padding="12" Margin="0,0,0,16">
+                                            <StackPanel>
+                                                <CheckBox x:Name="ScanDomainsCheckbox" IsChecked="True" Margin="0,2">
+                                                    <TextBlock Text="Federated Domains - Detect AADInternals ConvertTo-AADIntBackdoor attacks" FontSize="12"/>
+                                                </CheckBox>
+                                                <CheckBox x:Name="ScanPTACheckbox" IsChecked="True" Margin="0,2">
+                                                    <TextBlock Text="PTA Agents - Detect rogue Pass-through Authentication agents (PTASpy)" FontSize="12"/>
+                                                </CheckBox>
+                                                <CheckBox x:Name="ScanServicePrincipalsCheckbox" IsChecked="True" Margin="0,2">
+                                                    <TextBlock Text="Service Principals - Detect apps with dangerous permissions" FontSize="12"/>
+                                                </CheckBox>
+                                                <CheckBox x:Name="ScanOAuthGrantsCheckbox" IsChecked="True" Margin="0,2">
+                                                    <TextBlock Text="OAuth Grants - Detect admin consent attacks and suspicious delegated permissions" FontSize="12"/>
+                                                </CheckBox>
+                                                <CheckBox x:Name="ScanAppCredentialsCheckbox" IsChecked="True" Margin="0,2">
+                                                    <TextBlock Text="App Credentials - Detect recently added or long-lived secrets/certificates" FontSize="12"/>
+                                                </CheckBox>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Run Scan Button -->
+                                        <Button x:Name="RunBackdoorScanButton" Content="Run Backdoor Detection Scan"
+                                                Style="{StaticResource PrimaryButtonStyle}"
+                                                Click="RunBackdoorScanButton_Click" HorizontalAlignment="Left"/>
+
+                                        <!-- Scan Progress -->
+                                        <StackPanel x:Name="BackdoorScanProgressPanel" Visibility="Collapsed" Margin="0,20,0,0">
+                                            <Grid Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="BackdoorScanProgressText" Text="Scanning..." FontSize="13"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                            </Grid>
+                                            <ProgressBar x:Name="BackdoorScanProgressBar" Height="8" IsIndeterminate="True"/>
+                                        </StackPanel>
+
+                                        <!-- Scan Results Summary -->
+                                        <Border x:Name="BackdoorResultsPanel" Visibility="Collapsed"
+                                                Background="#F5F5F5" CornerRadius="4" Padding="16" Margin="0,20,0,0">
+                                            <StackPanel>
+                                                <TextBlock Text="SCAN RESULTS" FontSize="11" FontWeight="Bold"
+                                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12"/>
+                                                <Grid Margin="0,0,0,16">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                                        <TextBlock x:Name="CriticalFindingsCount" Text="0" FontSize="24" FontWeight="Bold"
+                                                                   Foreground="#D32F2F" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="Critical" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                                        <TextBlock x:Name="HighFindingsCount" Text="0" FontSize="24" FontWeight="Bold"
+                                                                   Foreground="#F57C00" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="High" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                                        <TextBlock x:Name="MediumFindingsCount" Text="0" FontSize="24" FontWeight="Bold"
+                                                                   Foreground="#FBC02D" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="Medium" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                                        <TextBlock x:Name="LowFindingsCount" Text="0" FontSize="24" FontWeight="Bold"
+                                                                   Foreground="{StaticResource PrimaryBrush}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="Low" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="4" HorizontalAlignment="Center">
+                                                        <TextBlock x:Name="InfoFindingsCount" Text="0" FontSize="24" FontWeight="Bold"
+                                                                   Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="Info" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <TextBlock x:Name="BackdoorScanDuration" FontSize="12"
+                                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12"/>
+
+                                                <!-- Export Button -->
+                                                <Button x:Name="ExportFindingsButton" Content="Export Findings to JSON"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Click="ExportFindingsButton_Click" HorizontalAlignment="Left"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Findings List -->
+                                        <TextBlock x:Name="FindingsHeader" Text="FINDINGS" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,20,0,8" Visibility="Collapsed"/>
+                                        <Border x:Name="FindingsListBorder" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4"
+                                                Margin="0,0,0,16" Visibility="Collapsed">
+                                            <ListView x:Name="FindingsListView"
+                                                      Height="300"
+                                                      BorderThickness="0"
+                                                      SelectionChanged="FindingsListView_SelectionChanged">
+                                                <ListView.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Padding="12,8" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border Grid.Column="0" Width="8" Height="8" CornerRadius="4"
+                                                                        Background="{Binding SeverityColor}" Margin="0,4,12,0" VerticalAlignment="Top"/>
+                                                                <StackPanel Grid.Column="1">
+                                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13"
+                                                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                                    <TextBlock Text="{Binding TypeDisplay}" FontSize="11"
+                                                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0"/>
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ListView.ItemTemplate>
+                                            </ListView>
+                                        </Border>
+
+                                        <!-- Selected Finding Details -->
+                                        <Border x:Name="FindingDetailsPanel" Visibility="Collapsed"
+                                                Background="White" CornerRadius="4" Padding="16"
+                                                BorderBrush="#E0E0E0" BorderThickness="1">
+                                            <StackPanel>
+                                                <Grid Margin="0,0,0,12">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border x:Name="FindingSeverityBadge" Grid.Column="0"
+                                                            CornerRadius="4" Padding="8,4" Margin="0,0,12,0">
+                                                        <TextBlock x:Name="FindingSeverityText" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                                                    </Border>
+                                                    <TextBlock x:Name="FindingMitreTechnique" Grid.Column="1" FontSize="11"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                </Grid>
+
+                                                <TextBlock x:Name="FindingTitle" FontSize="15" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                                                <TextBlock x:Name="FindingDescription" FontSize="13"
+                                                           Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                                                <TextBlock Text="AFFECTED RESOURCE" FontSize="10" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                                <TextBlock x:Name="FindingAffectedResource" FontSize="12"
+                                                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
+
+                                                <TextBlock Text="RECOMMENDATION" FontSize="10" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                                <Border Background="#FFF3E0" CornerRadius="4" Padding="12" Margin="0,0,0,12">
+                                                    <TextBlock x:Name="FindingRecommendation" FontSize="12"
+                                                               Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap"/>
+                                                </Border>
+
+                                                <TextBlock Text="DETAILS" FontSize="10" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                                <ItemsControl x:Name="FindingDetailsList" Margin="0,0,0,16">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                                                <TextBlock Text="{Binding Key}" FontWeight="SemiBold" FontSize="11"
+                                                                           Foreground="{StaticResource TextSecondaryBrush}" Width="150"/>
+                                                                <TextBlock Text="{Binding Value}" FontSize="11"
+                                                                           Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+
+                                                <!-- Generic Remediation Panel for all remediatable backdoors -->
+                                                <Border x:Name="RemediationPanel" Visibility="Collapsed"
+                                                        Background="#E3F2FD" CornerRadius="4" Padding="16" Margin="0,0,0,12">
+                                                    <StackPanel>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                            <TextBlock Text="🔧" FontSize="16" Margin="0,0,8,0"/>
+                                                            <TextBlock x:Name="RemediationTitle" Text="REMEDIATE FINDING" FontSize="12" FontWeight="Bold"
+                                                                       Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                        <TextBlock x:Name="RemediationDescription"
+                                                                   FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                                        <CheckBox x:Name="ConfirmRemediationCheckbox" Margin="0,0,0,12" Checked="ConfirmRemediationCheckbox_Changed" Unchecked="ConfirmRemediationCheckbox_Changed">
+                                                            <TextBlock x:Name="RemediationConfirmText" Text="I understand and want to proceed with remediation"
+                                                                       FontSize="12" TextWrapping="Wrap"/>
+                                                        </CheckBox>
+                                                        <Button x:Name="RemediateButton" Content="Remediate"
+                                                                Style="{StaticResource PrimaryButtonStyle}" Padding="16,8"
+                                                                Click="RemediateButton_Click" IsEnabled="False"/>
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <!-- Add Revoke Federation Backdoor button and panel -->
+                                                <Border x:Name="RevokeFederationPanel" Visibility="Collapsed"
+                                                        Background="#FFEBEE" CornerRadius="4" Padding="16" Margin="0,0,0,12">
+                                                    <StackPanel>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                            <TextBlock Text="⚠" FontSize="16" Foreground="#D32F2F" Margin="0,0,8,0"/>
+                                                            <TextBlock Text="REVOKE FEDERATION BACKDOOR" FontSize="12" FontWeight="Bold"
+                                                                       Foreground="#D32F2F" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                        <TextBlock Text="This will delete the federation configuration for this domain, converting it back to managed authentication. This action cannot be undone easily - you would need to reconfigure federation manually."
+                                                                   FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                                        <CheckBox x:Name="ConfirmRevokeFederationCheckbox" Margin="0,0,0,12">
+                                                            <TextBlock Text="I understand this will remove the federation trust and force users to authenticate via Entra ID directly"
+                                                                       FontSize="12" TextWrapping="Wrap"/>
+                                                        </CheckBox>
+                                                        <Button x:Name="RevokeFederationButton" Content="Revoke Federation Configuration"
+                                                                Background="#D32F2F" Foreground="White" Padding="16,8"
+                                                                Click="RevokeFederationButton_Click" IsEnabled="False"/>
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <!-- Mass Remediate All Backdoors Panel -->
+                                                <Border x:Name="MassRemediateAllPanel" Visibility="Collapsed"
+                                                        Background="#FBE9E7" CornerRadius="4" Padding="16">
+                                                    <StackPanel>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                            <TextBlock Text="⚡" FontSize="16" Margin="0,0,8,0"/>
+                                                            <TextBlock Text="MASS REMEDIATE ALL BACKDOORS" FontSize="12" FontWeight="Bold"
+                                                                       Foreground="#BF360C" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                        <TextBlock x:Name="MassRemediateAllCount"
+                                                                   FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                                        <TextBlock Text="This will automatically remediate ALL detected backdoors that support automated remediation. This includes federation backdoors, MFA bypass configs, secondary certificates, malicious apps, and OAuth grants."
+                                                                   FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                                        <CheckBox x:Name="ConfirmMassRemediateAll1" Margin="0,0,0,4" Checked="ConfirmMassRemediateAll_Changed" Unchecked="ConfirmMassRemediateAll_Changed">
+                                                            <TextBlock Text="I am responding to an active security incident" FontSize="12"/>
+                                                        </CheckBox>
+                                                        <CheckBox x:Name="ConfirmMassRemediateAll2" Margin="0,0,0,4" Checked="ConfirmMassRemediateAll_Changed" Unchecked="ConfirmMassRemediateAll_Changed">
+                                                            <TextBlock Text="I understand this will modify tenant configuration" FontSize="12"/>
+                                                        </CheckBox>
+                                                        <CheckBox x:Name="ConfirmMassRemediateAll3" Margin="0,0,0,12" Checked="ConfirmMassRemediateAll_Changed" Unchecked="ConfirmMassRemediateAll_Changed">
+                                                            <TextBlock Text="I have documented this action for audit purposes" FontSize="12"/>
+                                                        </CheckBox>
+                                                        <Button x:Name="MassRemediateAllButton" Content="Remediate All Backdoors"
+                                                                Background="#BF360C" Foreground="White" Padding="16,8"
+                                                                Click="MassRemediateAllButton_Click" IsEnabled="False"/>
+
+                                                        <!-- Progress panel for mass remediation -->
+                                                        <StackPanel x:Name="MassRemediateAllProgress" Visibility="Collapsed" Margin="0,16,0,0">
+                                                            <TextBlock x:Name="MassRemediateAllProgressText" FontSize="12" Margin="0,0,0,8"/>
+                                                            <ProgressBar x:Name="MassRemediateAllProgressBar" Height="8"/>
                                                         </StackPanel>
                                                     </StackPanel>
                                                 </Border>
@@ -1099,7 +1741,7 @@
                     <!-- Right Panel - Actions/Logs -->
                     <Border Grid.Column="1" Style="{StaticResource CardStyle}">
                         <StackPanel>
-                            <TextBlock Text="Quick Actions" FontSize="18" FontWeight="SemiBold" 
+                            <TextBlock Text="Quick Actions" FontSize="18" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
 
                             <!-- Example: Button for something -->
@@ -1112,7 +1754,7 @@
 
         <!-- Status Bar - Update Grid.Row from 2 to 3 -->
         <Border Grid.Row="3" Background="#1F1F1F" Padding="20,8">
-            <TextBlock Text="© Microsoft Corporation. All rights reserved." HorizontalAlignment="Center" 
+            <TextBlock Text="© Microsoft Corporation. All rights reserved." HorizontalAlignment="Center"
                        Foreground="White" FontSize="10"/>
         </Border>
     </Grid>
