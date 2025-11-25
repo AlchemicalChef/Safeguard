@@ -28,7 +28,7 @@ A comprehensive WPF GUI application for incident response in Microsoft Entra ID 
 
 ## Backdoor Detection
 
-Based on [Mandiant's research on AADInternals attacks](https://cloud.google.com/blog/topics/threat-intelligence/detecting-microsoft-365-azure-active-directory-backdoors), Safeguard can detect:
+Based on Mandiant's research, my own, and Microsoft's, Safeguard can detect:
 
 | Backdoor Type | Detection Method | Severity |
 |---------------|------------------|----------|
