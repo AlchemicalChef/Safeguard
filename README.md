@@ -1,6 +1,6 @@
 # Safeguard - Entra ID Incident Response Tool
 
-A comprehensive WPF GUI application for incident response in Microsoft Entra ID environments. Safeguard enables security teams to quickly take back control during a security incident by revoking user tokens, resetting MFA, cleaning up compromised enterprise applications, and detecting backdoors.
+A comprehensive application for incident response in Microsoft Entra ID environments. Safeguard enables security teams to quickly take back control during a security incident by revoking user tokens, resetting MFA, cleaning up compromised enterprise applications, and detecting backdoors.
 
 ## Use Cases
 
