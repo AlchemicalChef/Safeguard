@@ -224,7 +224,7 @@ public class TokenRevocationService
             {
                 var result = await GraphClient.Users[userId]
                     .RevokeSignInSessions
-                    .PostAsync(cancellationToken: cancellationToken);
+                    .PostAsRevokeSignInSessionsPostResponseAsync(cancellationToken: cancellationToken);
 
                 if (result?.Value == true)
                 {
@@ -719,15 +719,15 @@ public class TokenRevocationService
             if (sp == null && app == null)
                 return null;
 
-            return new EnterpriseAppInfo
-            {
-                ApplicationId = clientId,
-                ObjectId = app?.Id,
-                DisplayName = app?.DisplayName ?? sp?.DisplayName,
-                ServicePrincipalId = sp?.Id,
-                CreatedDateTime = app?.CreatedDateTime ?? sp?.CreatedDateTime,
-                Tags = sp?.Tags?.ToList() ?? new List<string>()
-            };
+                return new EnterpriseAppInfo
+                {
+                    ApplicationId = clientId,
+                    ObjectId = app?.Id,
+                    DisplayName = app?.DisplayName ?? sp?.DisplayName,
+                    ServicePrincipalId = sp?.Id,
+                    CreatedDateTime = app?.CreatedDateTime?.UtcDateTime,
+                    Tags = sp?.Tags?.ToList() ?? new List<string>()
+                };
         }
         catch
         {
@@ -777,7 +777,6 @@ public class TokenRevocationService
                         ApplicationId = sp.AppId,
                         ServicePrincipalId = sp.Id,
                         DisplayName = sp.DisplayName,
-                        CreatedDateTime = sp.CreatedDateTime,
                         Tags = sp.Tags?.ToList() ?? new List<string>()
                     });
                 }

@@ -25,6 +25,7 @@ public class BackdoorFinding
     public Dictionary<string, string> Details { get; set; } = new();
     public string Recommendation { get; set; } = string.Empty;
     public string MitreAttackId { get; set; } = string.Empty;
+    public string MitreAttackTechnique { get; set; } = string.Empty;
 }
 
 public enum BackdoorType
@@ -168,6 +169,8 @@ public class BackdoorScanResult
     public DateTime ScanStartTime { get; set; }
     public DateTime ScanEndTime { get; set; }
     public TimeSpan Duration => ScanEndTime - ScanStartTime;
+    
+    public TimeSpan ScanDuration => Duration;
     
     public int TotalFindingsCount => Findings.Count;
     public int CriticalCount { get; set; }
@@ -604,11 +607,14 @@ public class AppSecurityAnalysis
     public SeverityLevel OverallRisk { get; set; }
 }
 
+/// <summary>
+/// Unified SeverityLevel enum - removed duplicate, using consistent values
+/// </summary>
 public enum SeverityLevel
 {
-    Critical,
-    High,
-    Medium,
+    Info,
     Low,
-    Informational
+    Medium,
+    High,
+    Critical
 }

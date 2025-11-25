@@ -7,6 +7,7 @@ using Azure.Core;
 using Microsoft.Graph;
 using Microsoft.Identity.Client;
 using Safeguard.Models;
+using AuthenticationResult = Safeguard.Models.AuthenticationResult;
 
 namespace Safeguard.Services;
 
@@ -43,7 +44,7 @@ public class AuthenticationService
     public string? CurrentUserPrincipalName => _currentUserPrincipalName;
 
     public async Task<AuthenticationResult> AuthenticateAsync(
-        string username, 
+        string username,
         SecureString password,
         CancellationToken cancellationToken = default)
     {
@@ -80,8 +81,10 @@ public class AuthenticationService
                 password.MakeReadOnly();
             }
 
+            var passwordString = ConvertToUnsecureString(password);
+
             var msalResult = await _publicClientApp
-                .AcquireTokenByUsernamePassword(RequiredScopes, username, password)
+                .AcquireTokenByUsernamePassword(RequiredScopes, username, passwordString)
                 .ExecuteAsync(cancellationToken);
 
             if (msalResult == null || string.IsNullOrEmpty(msalResult.AccessToken))
@@ -220,6 +223,28 @@ public class AuthenticationService
         _cachedAccount = null;
         _currentUserId = null;
         _currentUserPrincipalName = null;
+    }
+
+    private static string ConvertToUnsecureString(SecureString secureString)
+    {
+        if (secureString == null)
+        {
+            throw new ArgumentNullException(nameof(secureString));
+        }
+
+        var unmanagedString = IntPtr.Zero;
+        try
+        {
+            unmanagedString = Marshal.SecureStringToGlobalAllocUnicode(secureString);
+            return Marshal.PtrToStringUni(unmanagedString) ?? string.Empty;
+        }
+        finally
+        {
+            if (unmanagedString != IntPtr.Zero)
+            {
+                Marshal.ZeroFreeGlobalAllocUnicode(unmanagedString);
+            }
+        }
     }
 }
 
