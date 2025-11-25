@@ -680,9 +680,9 @@ public class BackdoorDetectionService : IDisposable
         }
     }
 
-    private async Task<FederationSecurityConfig> AnalyzeFederationSecurityAsync(
-        Domain domain, 
-        InternalDomainFederation config, 
+    private Task<FederationSecurityConfig> AnalyzeFederationSecurityAsync(
+        Domain domain,
+        InternalDomainFederation config,
         CancellationToken cancellationToken)
     {
         var securityConfig = new FederationSecurityConfig
@@ -725,7 +725,7 @@ public class BackdoorDetectionService : IDisposable
         if (securityConfig.HasSecondarySigningCertificate)
             securityConfig.SecurityIssues.Add("Secondary signing certificate present");
 
-        return securityConfig;
+        return Task.FromResult(securityConfig);
     }
 
     private void AnalyzeSigningCertificate(ExtendedBackdoorScanResult result, string domainId, string certBase64)
@@ -1341,7 +1341,7 @@ public class BackdoorDetectionService : IDisposable
         try
         {
             // Get OAuth grants that involve FOCI apps with dangerous scopes
-            var grants = await _graphClient.Oauth2PermissionGrants
+            var grants = await GraphClient.Oauth2PermissionGrants
                 .GetAsync(r => r.QueryParameters.Filter = "consentType eq 'AllPrincipals'", cancellationToken);
 
             if (grants?.Value == null) return;
@@ -1351,7 +1351,7 @@ public class BackdoorDetectionService : IDisposable
                 if (string.IsNullOrEmpty(grant.ClientId)) continue;
                 
                 // Check if this is a FOCI app
-                var sp = await _graphClient.ServicePrincipals[grant.ClientId]
+                var sp = await GraphClient.ServicePrincipals[grant.ClientId]
                     .GetAsync(r => r.QueryParameters.Select = new[] { "appId", "displayName" }, cancellationToken);
                 
                 if (sp?.AppId != null && FociClientIds.FociApps.ContainsKey(sp.AppId))
@@ -1401,8 +1401,8 @@ public class BackdoorDetectionService : IDisposable
     {
         try
         {
-            var apps = await _graphClient.Applications
-                .GetAsync(r => r.QueryParameters.Select = new[] 
+            var apps = await GraphClient.Applications
+                .GetAsync(r => r.QueryParameters.Select = new[]
                 { 
                     "id", "appId", "displayName", "web", "spa", "publicClient" 
                 }, cancellationToken);
@@ -1479,8 +1479,8 @@ public class BackdoorDetectionService : IDisposable
     {
         try
         {
-            var apps = await _graphClient.Applications
-                .GetAsync(r => r.QueryParameters.Select = new[] 
+            var apps = await GraphClient.Applications
+                .GetAsync(r => r.QueryParameters.Select = new[]
                 { 
                     "id", "appId", "displayName", "web", "isFallbackPublicClient" 
                 }, cancellationToken);
@@ -1545,8 +1545,8 @@ public class BackdoorDetectionService : IDisposable
         try
         {
             // Check organization's on-prem sync settings for Seamless SSO
-            var org = await _graphClient.Organization
-                .GetAsync(r => r.QueryParameters.Select = new[] 
+            var org = await GraphClient.Organization
+                .GetAsync(r => r.QueryParameters.Select = new[]
                 { 
                     "id", "displayName", "onPremisesSyncEnabled" 
                 }, cancellationToken);
@@ -1606,7 +1606,7 @@ public class BackdoorDetectionService : IDisposable
     {
         try
         {
-            var devices = await _graphClient.Devices
+            var devices = await GraphClient.Devices
                 .GetAsync(r =>
                 {
                     r.QueryParameters.Select = new[] 
