@@ -534,6 +534,7 @@ public partial class MainWindow : Window
                 batchSize,
                 delay,
                 OnMassRevocationProgress,
+                OnMassRevocationError,
                 _cancellationTokenSource.Token);
 
             ShowMassResults(result);
@@ -569,6 +570,16 @@ public partial class MainWindow : Window
             MassProgressText.Text = $"Processing {current} of {total} users...";
             MassProgressPercent.Text = $"{percent:F1}%";
             MassCurrentUser.Text = $"Current: {currentUser}";
+        });
+    }
+
+    private void OnMassRevocationError(string message)
+    {
+        Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            AddLogEntry(message, LogLevel.Error);
+            MassProgressText.Text = "Encountered an error while enumerating users";
+            MassCurrentUser.Text = message;
         });
     }
 
