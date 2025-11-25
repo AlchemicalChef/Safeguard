@@ -100,29 +100,6 @@ Each finding includes MITRE ATT&CK technique mapping and actionable remediation 
 - Press `Shift+F9` to start debugging
 - Use the **Debug** tool window to inspect variables
 
-## Project Structure
-
-\`\`\`
-EntraTokenRevocationGUI/
-├── App.xaml                    # Application resources and styles
-├── App.xaml.cs                 # Application entry point
-├── MainWindow.xaml             # Main UI layout (WPF XAML)
-├── MainWindow.xaml.cs          # Main window logic and event handlers
-├── Safeguard.csproj            # Project file
-├── Safeguard.sln               # Solution file for Rider
-├── Models/
-│   ├── ActivityLogEntry.cs     # Log entry data model
-│   ├── AppConfiguration.cs     # Configuration settings model
-│   ├── BackdoorDetectionModels.cs  # Backdoor finding models
-│   ├── RevocationResult.cs     # API response models
-│   └── UserViewModel.cs        # User display model
-├── Services/
-│   ├── AuthenticationService.cs    # Entra ID authentication logic
-│   ├── BackdoorDetectionService.cs # Backdoor scanning logic
-│   └── TokenRevocationService.cs   # Graph API operations
-└── Properties/
-    └── launchSettings.json     # Debug launch configuration
-\`\`\`
 
 ## Incident Response Workflows
 
