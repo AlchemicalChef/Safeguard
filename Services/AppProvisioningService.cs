@@ -37,23 +37,9 @@ public class AppProvisioningService
     {
         try
         {
-            OnStatusUpdate?.Invoke("Starting interactive authentication...");
-
-            // Use interactive browser authentication with minimal bootstrap scopes
-            var credential = new InteractiveBrowserCredential(new InteractiveBrowserCredentialOptions
-            {
-                TenantId = tenantId == "common" ? null : tenantId,
-                ClientId = "14d82eec-204b-4c2f-b7e8-296a70dab67e", // Microsoft Graph PowerShell
-                RedirectUri = new Uri("http://localhost")
-            });
-
             var bootstrapScopes = new[] { "Application.ReadWrite.All", "DelegatedPermissionGrant.ReadWrite.All" };
-            
-            OnStatusUpdate?.Invoke("Opening browser for authentication...");
-            
-            var graphClient = new GraphServiceClient(credential, bootstrapScopes);
+            var graphClient = await CreateGraphClientAsync(tenantId, bootstrapScopes, cancellationToken);
 
-            // Verify authentication works
             OnStatusUpdate?.Invoke("Verifying authentication...");
             var me = await graphClient.Me.GetAsync(cancellationToken: cancellationToken);
             
@@ -232,6 +218,45 @@ public class AppProvisioningService
                 Success = false,
                 ErrorMessage = "An unexpected error occurred during provisioning."
             };
+        }
+    }
+
+    private async Task<GraphServiceClient> CreateGraphClientAsync(
+        string tenantId,
+        string[] scopes,
+        CancellationToken cancellationToken)
+    {
+        OnStatusUpdate?.Invoke("Starting interactive authentication...");
+
+        try
+        {
+            var interactiveCredential = new InteractiveBrowserCredential(new InteractiveBrowserCredentialOptions
+            {
+                TenantId = tenantId == "common" ? null : tenantId,
+                ClientId = "14d82eec-204b-4c2f-b7e8-296a70dab67e", // Microsoft Graph PowerShell
+                RedirectUri = new Uri("http://localhost")
+            });
+
+            OnStatusUpdate?.Invoke("Opening browser for authentication...");
+            return await Task.FromResult(new GraphServiceClient(interactiveCredential, scopes));
+        }
+        catch (AuthenticationFailedException ex)
+        {
+            OnError?.Invoke($"Interactive authentication failed: {ex.Message}");
+            OnStatusUpdate?.Invoke("Falling back to device code authentication (alternate client)...");
+
+            var deviceCodeCredential = new DeviceCodeCredential(options =>
+            {
+                options.TenantId = tenantId == "common" ? null : tenantId;
+                options.ClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"; // Azure CLI public client
+                options.DeviceCodeCallback = (code, _) =>
+                {
+                    OnStatusUpdate?.Invoke($"To sign in, use the code {code.UserCode} at {code.VerificationUri}");
+                    return Task.CompletedTask;
+                };
+            });
+
+            return await Task.FromResult(new GraphServiceClient(deviceCodeCredential, scopes));
         }
     }
 
