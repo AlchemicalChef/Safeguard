@@ -23,7 +23,7 @@
     <PackageReference Include="Azure.Identity" Version="1.10.4" />
     <PackageReference Include="Microsoft.Graph" Version="5.42.0" />
     <!-- Added MSAL for username/password (ROPC) authentication -->
-    <PackageReference Include="Microsoft.Identity.Client" Version="4.58.1" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.60.4" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
