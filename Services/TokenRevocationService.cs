@@ -96,6 +96,7 @@ public class TokenRevocationService
         int batchSize = 50,
         int delayBetweenBatchesMs = 1000,
         Action<int, int, string>? progressCallback = null,
+        Action<string>? errorCallback = null,
         CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -165,9 +166,16 @@ public class TokenRevocationService
                 }
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Log error but continue with partial results
+            var message = $"Failed to enumerate users for mass revocation: {ex.Message}";
+            errorCallback?.Invoke(message);
+
+            results.Add(new RevocationResult
+            {
+                Success = false,
+                ErrorMessage = message
+            });
         }
 
         stopwatch.Stop();
