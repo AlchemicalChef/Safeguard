@@ -725,7 +725,7 @@ public class TokenRevocationService
                 ObjectId = app?.Id,
                 DisplayName = app?.DisplayName ?? sp?.DisplayName,
                 ServicePrincipalId = sp?.Id,
-                CreatedDateTime = app?.CreatedDateTime ?? sp?.CreatedDateTime,
+                CreatedDateTime = app?.CreatedDateTime,
                 Tags = sp?.Tags?.ToList() ?? new List<string>()
             };
         }
@@ -777,7 +777,6 @@ public class TokenRevocationService
                         ApplicationId = sp.AppId,
                         ServicePrincipalId = sp.Id,
                         DisplayName = sp.DisplayName,
-                        CreatedDateTime = sp.CreatedDateTime,
                         Tags = sp.Tags?.ToList() ?? new List<string>()
                     });
                 }
