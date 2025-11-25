@@ -2,28 +2,45 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- CHANGE: Cross-platform target framework -->
+    <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
     <LangVersion>latest</LangVersion>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <!-- Updated assembly info for Safeguard branding -->
+    <!-- CHANGE: Avalonia-specific settings -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RootNamespace>Safeguard</RootNamespace>
     <AssemblyName>Safeguard</AssemblyName>
     <Version>1.0.0</Version>
     <Authors>Security Team</Authors>
     <Company>Your Organization</Company>
     <Product>Safeguard - Entra ID Incident Response</Product>
-    <Description>Incident response tool for Microsoft Entra ID - Token revocation, MFA reset, and application cleanup</Description>
-    <Copyright>Copyright © 2025</Copyright>
+    <Description>Cross-platform incident response tool for Microsoft Entra ID</Description>
+    <Copyright>Copyright 2025</Copyright>
+    <!-- macOS specific -->
+    <CFBundleName>Safeguard</CFBundleName>
+    <CFBundleDisplayName>Safeguard</CFBundleDisplayName>
+    <CFBundleIdentifier>com.safeguard.entraid</CFBundleIdentifier>
+    <CFBundleVersion>1.0.0</CFBundleVersion>
+    <CFBundleShortVersionString>1.0</CFBundleShortVersionString>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Identity" Version="1.11.4" />
+    <!-- CHANGE: Avalonia packages instead of WPF -->
+    <PackageReference Include="Avalonia" Version="11.2.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.1" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.1" />
+    <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.1" />
+    <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
+    <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.2.1" />
+    
+    <!-- Existing packages - all cross-platform compatible -->
+    <PackageReference Include="Azure.Identity" Version="1.10.4" />
     <PackageReference Include="Microsoft.Graph" Version="5.42.0" />
-    <!-- Added MSAL for username/password (ROPC) authentication -->
-    <PackageReference Include="Microsoft.Identity.Client" Version="4.61.3" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.58.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />

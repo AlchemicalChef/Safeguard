@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Avalonia.Media;
 
 namespace Safeguard.Models;
 
@@ -34,7 +35,7 @@ public class RiskyAccountViewModel : INotifyPropertyChanged
     /// <summary>
     /// Formatted display of password last set date
     /// </summary>
-    public string PasswordLastSetDisplay
+    public string LastPasswordChange
     {
         get
         {
@@ -55,15 +56,15 @@ public class RiskyAccountViewModel : INotifyPropertyChanged
     public string AccountStatusDisplay => AccountEnabled ? "Enabled" : "Disabled";
     
     /// <summary>
-    /// Color indicator based on severity
+    /// Color indicator based on severity - returns brush for XAML binding
     /// </summary>
-    public string SeverityColor => Severity switch
+    public ISolidColorBrush SeverityColor => Severity switch
     {
-        RiskSeverity.Critical => "#DC2626",
-        RiskSeverity.High => "#EA580C",
-        RiskSeverity.Medium => "#CA8A04",
-        RiskSeverity.Low => "#2563EB",
-        _ => "#6B7280"
+        RiskSeverity.Critical => new SolidColorBrush(Color.Parse("#DC2626")),
+        RiskSeverity.High => new SolidColorBrush(Color.Parse("#EA580C")),
+        RiskSeverity.Medium => new SolidColorBrush(Color.Parse("#CA8A04")),
+        RiskSeverity.Low => new SolidColorBrush(Color.Parse("#2563EB")),
+        _ => new SolidColorBrush(Color.Parse("#6B7280"))
     };
 
     public event PropertyChangedEventHandler? PropertyChanged;

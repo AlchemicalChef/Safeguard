@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.InteropServices;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,6 +6,7 @@ using Azure.Core;
 using Microsoft.Graph;
 using Microsoft.Identity.Client;
 using Safeguard.Models;
+using AuthenticationResult = Safeguard.Models.AuthenticationResult;
 
 namespace Safeguard.Services;
 
@@ -43,7 +43,7 @@ public class AuthenticationService
     public string? CurrentUserPrincipalName => _currentUserPrincipalName;
 
     public async Task<AuthenticationResult> AuthenticateAsync(
-        string username, 
+        string username,
         SecureString password,
         CancellationToken cancellationToken = default)
     {
@@ -221,6 +221,7 @@ public class AuthenticationService
         _currentUserId = null;
         _currentUserPrincipalName = null;
     }
+
 }
 
 internal class RefreshingTokenCredential : TokenCredential
