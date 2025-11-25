@@ -121,17 +121,15 @@ public class TokenRevocationService
 
             if (usersResponse?.Value != null)
             {
-                allUsers.AddRange(usersResponse.Value);
+                var pageIterator = PageIterator<User, UserCollectionResponse>
+                    .CreatePageIterator(GraphClient, usersResponse, (user) =>
+                    {
+                        allUsers.Add(user);
+                        return true;
+                    });
+
+                await pageIterator.IterateAsync(cancellationToken);
             }
-
-            var pageIterator = PageIterator<User, UserCollectionResponse>
-                .CreatePageIterator(GraphClient, usersResponse!, (user) =>
-                {
-                    allUsers.Add(user);
-                    return true;
-                });
-
-            await pageIterator.IterateAsync(cancellationToken);
 
             var usersToRevoke = allUsers
                 .Where(u => u.Id != excludeUserId)
@@ -606,17 +604,15 @@ public class TokenRevocationService
 
             if (usersResponse?.Value != null)
             {
-                allUsers.AddRange(usersResponse.Value);
+                var pageIterator = PageIterator<User, UserCollectionResponse>
+                    .CreatePageIterator(GraphClient, usersResponse, (user) =>
+                    {
+                        allUsers.Add(user);
+                        return true;
+                    });
+
+                await pageIterator.IterateAsync(cancellationToken);
             }
-
-            var pageIterator = PageIterator<User, UserCollectionResponse>
-                .CreatePageIterator(GraphClient, usersResponse!, (user) =>
-                {
-                    allUsers.Add(user);
-                    return true;
-                });
-
-            await pageIterator.IterateAsync(cancellationToken);
 
             var usersToReset = allUsers
                 .Where(u => u.Id != excludeUserId)
