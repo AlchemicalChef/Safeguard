@@ -7,6 +7,7 @@ using Azure.Core;
 using Microsoft.Graph;
 using Microsoft.Identity.Client;
 using Safeguard.Models;
+using ModelAuthenticationResult = Safeguard.Models.AuthenticationResult;
 
 namespace Safeguard.Services;
 
@@ -42,8 +43,8 @@ public class AuthenticationService
     public string? CurrentUserId => _currentUserId;
     public string? CurrentUserPrincipalName => _currentUserPrincipalName;
 
-    public async Task<AuthenticationResult> AuthenticateAsync(
-        string username, 
+    public async Task<ModelAuthenticationResult> AuthenticateAsync(
+        string username,
         SecureString password,
         CancellationToken cancellationToken = default)
     {
@@ -51,7 +52,7 @@ public class AuthenticationService
         {
             if (string.IsNullOrWhiteSpace(username))
             {
-                return new AuthenticationResult
+                return new ModelAuthenticationResult
                 {
                     Success = false,
                     ErrorMessage = "Username is required"
@@ -60,7 +61,7 @@ public class AuthenticationService
 
             if (password == null || password.Length == 0)
             {
-                return new AuthenticationResult
+                return new ModelAuthenticationResult
                 {
                     Success = false,
                     ErrorMessage = "Password is required"
@@ -86,7 +87,7 @@ public class AuthenticationService
 
             if (msalResult == null || string.IsNullOrEmpty(msalResult.AccessToken))
             {
-                return new AuthenticationResult
+                return new ModelAuthenticationResult
                 {
                     Success = false,
                     ErrorMessage = "Failed to acquire access token"
@@ -113,7 +114,7 @@ public class AuthenticationService
             _currentUserId = me.Id;
             _currentUserPrincipalName = me.UserPrincipalName;
 
-            return new AuthenticationResult
+            return new ModelAuthenticationResult
             {
                 Success = true,
                 UserId = _currentUserId,
@@ -125,7 +126,7 @@ public class AuthenticationService
         }
         catch (MsalUiRequiredException)
         {
-            return new AuthenticationResult
+            return new ModelAuthenticationResult
             {
                 Success = false,
                 ErrorMessage = "Interactive authentication required. This account may have MFA enabled or requires consent."
@@ -133,7 +134,7 @@ public class AuthenticationService
         }
         catch (MsalServiceException ex) when (ex.ErrorCode == "invalid_grant")
         {
-            return new AuthenticationResult
+            return new ModelAuthenticationResult
             {
                 Success = false,
                 ErrorMessage = "Invalid username or password."
@@ -141,7 +142,7 @@ public class AuthenticationService
         }
         catch (MsalServiceException ex) when (ex.ErrorCode == "interaction_required")
         {
-            return new AuthenticationResult
+            return new ModelAuthenticationResult
             {
                 Success = false,
                 ErrorMessage = "This account requires interactive sign-in due to MFA or Conditional Access policy."
@@ -149,7 +150,7 @@ public class AuthenticationService
         }
         catch (MsalServiceException ex) when (ex.ErrorCode == "invalid_client")
         {
-            return new AuthenticationResult
+            return new ModelAuthenticationResult
             {
                 Success = false,
                 ErrorMessage = "Invalid Client ID or the application is not configured for public client flows."
@@ -157,7 +158,7 @@ public class AuthenticationService
         }
         catch (MsalClientException ex) when (ex.ErrorCode == "unknown_user_type")
         {
-            return new AuthenticationResult
+            return new ModelAuthenticationResult
             {
                 Success = false,
                 ErrorMessage = "Unknown user type. Ensure the username is a valid organizational account."
@@ -165,7 +166,7 @@ public class AuthenticationService
         }
         catch (MsalClientException)
         {
-            return new AuthenticationResult
+            return new ModelAuthenticationResult
             {
                 Success = false,
                 ErrorMessage = "Authentication client error. Please verify your Client ID."
@@ -173,7 +174,7 @@ public class AuthenticationService
         }
         catch (Exception)
         {
-            return new AuthenticationResult
+            return new ModelAuthenticationResult
             {
                 Success = false,
                 ErrorMessage = "Authentication failed. Please verify your credentials and network connection."
