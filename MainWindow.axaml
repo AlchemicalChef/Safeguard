@@ -191,31 +191,30 @@
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock Text="CREDENTIALS" FontSize="11" FontWeight="SemiBold"
+                    <TextBlock Text="AUTHENTICATION" FontSize="11" FontWeight="SemiBold"
                                Foreground="{StaticResource TextSecondaryBrush}" Margin="0,8,0,8"/>
 
-                    <Border Background="#FFF3E0" CornerRadius="4" Padding="16" Margin="0,0,0,12">
+                    <Border Background="#E3F2FD" CornerRadius="4" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
-                            <TextBlock Text="SECURITY NOTE" FontSize="11" FontWeight="Bold" Foreground="#E65100" Margin="0,0,0,8"/>
-                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#BF360C">
-                                Username/Password authentication does NOT work with MFA-enabled accounts.
-                                Only use this method if MFA has been disabled during an incident.
+                            <TextBlock Text="SECURE SIGN-IN" FontSize="11" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" Margin="0,0,0,8"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#1565C0">
+                                Click the button below to sign in using your browser.
+                                This method supports MFA and Conditional Access policies.
                             </TextBlock>
                         </StackPanel>
                     </Border>
 
-                    <StackPanel Margin="0,0,0,12">
-                        <TextBlock Text="Username (UPN)" FontSize="12" Margin="0,0,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
-                        <TextBox x:Name="UsernameInput"/>
-                    </StackPanel>
-
-                    <StackPanel Margin="0,0,0,16">
-                        <TextBlock Text="Password" FontSize="12" Margin="0,0,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
-                        <TextBox x:Name="PasswordInput" PasswordChar="*"/>
-                    </StackPanel>
-
-                    <Button x:Name="ConnectButton" Content="Authenticate" Classes="primary" 
+                    <Button x:Name="ConnectButton" Content="Sign In with Microsoft" Classes="primary"
                             Click="ConnectButton_Click" HorizontalAlignment="Stretch"/>
+
+                    <!-- Authentication In Progress -->
+                    <StackPanel x:Name="AuthInProgressPanel" IsVisible="False" Margin="0,16,0,0" HorizontalAlignment="Center">
+                        <ProgressBar IsIndeterminate="True" Height="4" Width="300"/>
+                        <TextBlock Text="Waiting for browser authentication..." FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                        <Button x:Name="CancelAuthButton" Content="Cancel" Classes="secondary"
+                                Click="CancelAuthButton_Click" Margin="0,12,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
 
                     <!-- Connection Error -->
                     <Border x:Name="ConnectionErrorPanel" IsVisible="False" Background="#FFEBEE" 

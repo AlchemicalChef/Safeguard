@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Safeguard.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
+using Safeguard.Exceptions;
+using Safeguard.Infrastructure;
+using Safeguard.Models;
 
 namespace Safeguard.Services;
 
@@ -15,13 +18,43 @@ namespace Safeguard.Services;
 public class RiskyAccountService
 {
     private readonly GraphServiceClient _graphClient;
-    
+    private readonly ILogger<RiskyAccountService> _logger;
+    private readonly ResilientGraphOperations _graphOps;
+
     // Windows FILETIME epoch - January 1, 1601
     private static readonly DateTimeOffset WindowsEpoch = new DateTimeOffset(1601, 1, 1, 0, 0, 0, TimeSpan.Zero);
-    
-    public RiskyAccountService(GraphServiceClient graphClient)
+
+    public event Action<int, string>? OnThrottled;
+    public event Action<int, TimeSpan, string>? OnRetry;
+    public event Action<string>? OnCircuitOpened;
+
+    public RiskyAccountService(
+        GraphServiceClient graphClient,
+        ResilienceConfiguration? resilienceConfig = null,
+        ILogger<RiskyAccountService>? logger = null)
     {
         _graphClient = graphClient ?? throw new ArgumentNullException(nameof(graphClient));
+        _logger = logger ?? LoggingConfiguration.GetLogger<RiskyAccountService>();
+
+        var config = resilienceConfig ?? new ResilienceConfiguration();
+        _graphOps = new ResilientGraphOperations(config, _logger);
+
+        // Wire up resilience events
+        _graphOps.OnThrottled += (retryAfter, op) =>
+        {
+            _logger.LogWarning("Throttled during {Operation}, waiting {RetryAfter}s", op, retryAfter);
+            OnThrottled?.Invoke(retryAfter, op);
+        };
+        _graphOps.OnRetry += (attempt, delay, op) =>
+        {
+            _logger.LogDebug("Retry {Attempt} for {Operation}, delay {Delay}ms", attempt, op, delay);
+            OnRetry?.Invoke(attempt, delay, op);
+        };
+        _graphOps.OnCircuitOpened += op =>
+        {
+            _logger.LogWarning("Circuit breaker opened for {Operation}", op);
+            OnCircuitOpened?.Invoke(op);
+        };
     }
     
     /// <summary>
@@ -109,54 +142,67 @@ public class RiskyAccountService
     private async Task<(List<User> users, string? error)> GetUsersWithPasswordInfoAsync(CancellationToken cancellationToken)
     {
         var users = new List<User>();
-        string? error = null;
-        
+        _logger.LogDebug("Retrieving users with password information");
+
         try
         {
-            var response = await _graphClient.Users
-                .GetAsync(requestConfiguration =>
-                {
-                    requestConfiguration.QueryParameters.Select = new[]
+            var response = await _graphOps.ExecuteAsync(
+                async () => await _graphClient.Users
+                    .GetAsync(requestConfiguration =>
                     {
-                        "id",
-                        "userPrincipalName",
-                        "displayName",
-                        "department",
-                        "accountEnabled",
-                        "lastPasswordChangeDateTime",
-                        "createdDateTime",
-                        "userType"
-                    };
-                    requestConfiguration.QueryParameters.Top = 999;
-                    requestConfiguration.QueryParameters.Filter = "userType eq 'Member'";
-                }, cancellationToken);
-            
+                        requestConfiguration.QueryParameters.Select = new[]
+                        {
+                            "id",
+                            "userPrincipalName",
+                            "displayName",
+                            "department",
+                            "accountEnabled",
+                            "lastPasswordChangeDateTime",
+                            "createdDateTime",
+                            "userType"
+                        };
+                        requestConfiguration.QueryParameters.Top = 999;
+                        requestConfiguration.QueryParameters.Filter = "userType eq 'Member'";
+                    }, cancellationToken),
+                "GetUsersWithPasswordInfo",
+                cancellationToken);
+
             if (response?.Value != null)
             {
                 users.AddRange(response.Value);
             }
-            
+
             // Handle pagination
             while (response?.OdataNextLink != null)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                
-                response = await _graphClient.Users
-                    .WithUrl(response.OdataNextLink)
-                    .GetAsync(cancellationToken: cancellationToken);
-                
+
+                response = await _graphOps.ExecuteAsync(
+                    async () => await _graphClient.Users
+                        .WithUrl(response.OdataNextLink)
+                        .GetAsync(cancellationToken: cancellationToken),
+                    "GetUsersWithPasswordInfo_Page",
+                    cancellationToken);
+
                 if (response?.Value != null)
                 {
                     users.AddRange(response.Value);
                 }
             }
+
+            _logger.LogInformation("Retrieved {Count} users for risk analysis", users.Count);
+            return (users, null);
         }
-        catch (Exception)
+        catch (GraphApiException ex)
         {
-            error = "Error retrieving users. Please verify permissions and connectivity.";
+            _logger.LogError(ex, "Failed to retrieve users for risk analysis");
+            return (users, $"Error retrieving users: {ex.Message}");
         }
-        
-        return (users, error);
+        catch (EntraConnectionException ex)
+        {
+            _logger.LogError(ex, "Connection error while retrieving users");
+            return (users, $"Connection error: {ex.Message}");
+        }
     }
     
     /// <summary>
@@ -236,6 +282,8 @@ public class RiskyAccountService
     /// </summary>
     public async Task<bool> ForcePasswordResetAsync(string userId, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Forcing password reset for user {UserId}", userId);
+
         try
         {
             var userUpdate = new User
@@ -246,38 +294,68 @@ public class RiskyAccountService
                     ForceChangePasswordNextSignInWithMfa = true
                 }
             };
-            
-            await _graphClient.Users[userId]
-                .PatchAsync(userUpdate, cancellationToken: cancellationToken);
-            
+
+            await _graphOps.ExecuteAsync(
+                async () =>
+                {
+                    await _graphClient.Users[userId]
+                        .PatchAsync(userUpdate, cancellationToken: cancellationToken);
+                    return true;
+                },
+                "ForcePasswordReset",
+                cancellationToken);
+
+            _logger.LogInformation("Successfully forced password reset for user {UserId}", userId);
             return true;
         }
-        catch
+        catch (GraphApiException ex)
         {
-            return false;
+            _logger.LogError(ex, "Failed to force password reset for user {UserId}", userId);
+            throw new OperationException(
+                $"Failed to force password reset: {ex.Message}",
+                "FORCE_PASSWORD_RESET_FAILED",
+                OperationType.UserModification,
+                userId,
+                ex);
         }
     }
-    
+
     /// <summary>
     /// Disables the specified user account
     /// </summary>
     public async Task<bool> DisableAccountAsync(string userId, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Disabling account for user {UserId}", userId);
+
         try
         {
             var userUpdate = new User
             {
                 AccountEnabled = false
             };
-            
-            await _graphClient.Users[userId]
-                .PatchAsync(userUpdate, cancellationToken: cancellationToken);
-            
+
+            await _graphOps.ExecuteAsync(
+                async () =>
+                {
+                    await _graphClient.Users[userId]
+                        .PatchAsync(userUpdate, cancellationToken: cancellationToken);
+                    return true;
+                },
+                "DisableAccount",
+                cancellationToken);
+
+            _logger.LogInformation("Successfully disabled account for user {UserId}", userId);
             return true;
         }
-        catch
+        catch (GraphApiException ex)
         {
-            return false;
+            _logger.LogError(ex, "Failed to disable account for user {UserId}", userId);
+            throw new OperationException(
+                $"Failed to disable account: {ex.Message}",
+                "DISABLE_ACCOUNT_FAILED",
+                OperationType.UserModification,
+                userId,
+                ex);
         }
     }
     
@@ -292,51 +370,73 @@ public class RiskyAccountService
         Action<int, int>? progressCallback = null,
         CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation(
+            "Starting bulk remediation for {Count} accounts (forceReset={ForceReset}, disable={Disable})",
+            accounts.Count, forcePasswordReset, disableAccount);
+
         int succeeded = 0;
         int failed = 0;
         int processed = 0;
-        
+
         foreach (var account in accounts)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            
+
             if (account.Id == excludeUserId)
             {
+                _logger.LogDebug("Skipping excluded user {UserId}", account.Id);
                 processed++;
                 progressCallback?.Invoke(processed, accounts.Count);
                 continue;
             }
-            
+
             try
             {
                 bool success = true;
-                
+
                 if (disableAccount)
                 {
                     success &= await DisableAccountAsync(account.Id!, cancellationToken);
                 }
-                
+
                 if (forcePasswordReset && success)
                 {
                     success &= await ForcePasswordResetAsync(account.Id!, cancellationToken);
                 }
-                
+
                 if (success)
+                {
                     succeeded++;
+                    _logger.LogDebug("Successfully remediated account {UserId}", account.Id);
+                }
                 else
+                {
                     failed++;
+                    _logger.LogWarning("Remediation returned false for account {UserId}", account.Id);
+                }
             }
-            catch
+            catch (OperationException ex)
             {
                 failed++;
+                _logger.LogError(ex, "Failed to remediate account {UserId}: {Error}",
+                    account.Id, ex.Message);
             }
-            
+            catch (Exception ex)
+            {
+                failed++;
+                _logger.LogError(ex, "Unexpected error remediating account {UserId}", account.Id);
+            }
+
             processed++;
             progressCallback?.Invoke(processed, accounts.Count);
-            
+
             await Task.Delay(100, cancellationToken);
         }
-        
+
+        _logger.LogInformation(
+            "Bulk remediation completed: {Succeeded} succeeded, {Failed} failed",
+            succeeded, failed);
+
         return (succeeded, failed);
     }
 }

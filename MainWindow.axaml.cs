@@ -12,10 +12,12 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Microsoft.Extensions.Logging;
+using Safeguard.Exceptions;
+using Safeguard.Infrastructure;
 using Safeguard.Models;
 using Safeguard.Services;
 using Microsoft.Graph.Models;
-using System.Security;
 
 namespace Safeguard;
 
@@ -232,24 +234,10 @@ public partial class MainWindow : Window
 
     #region Authentication
 
-    private static SecureString GetSecurePassword(TextBox passwordBox)
-    {
-        var securePassword = new SecureString();
-        var password = passwordBox.Text ?? string.Empty;
-        foreach (char c in password)
-        {
-            securePassword.AppendChar(c);
-        }
-        return securePassword;
-    }
-
     private async void ConnectButton_Click(object? sender, RoutedEventArgs e)
     {
         var tenantId = TenantIdInput.Text?.Trim() ?? "";
         var clientId = ClientIdInput.Text?.Trim() ?? "";
-        var username = UsernameInput.Text?.Trim() ?? "";
-        
-        using var securePassword = GetSecurePassword(PasswordInput);
 
         if (string.IsNullOrWhiteSpace(clientId))
         {
@@ -257,23 +245,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(username))
-        {
-            ShowConnectionError("Username is required");
-            return;
-        }
-
-        if (securePassword.Length == 0)
-        {
-            ShowConnectionError("Password is required");
-            return;
-        }
-
         _currentClientId = clientId;
+        _currentTenantId = tenantId;
 
         ConnectButton.IsEnabled = false;
-        ConnectButton.Content = "Authenticating...";
+        AuthInProgressPanel.IsVisible = true;
         ConnectionErrorPanel.IsVisible = false;
+
+        _cancellationTokenSource = new CancellationTokenSource();
 
         try
         {
@@ -288,36 +267,36 @@ public partial class MainWindow : Window
 
             _authService = new AuthenticationService(config);
             _authService.OnTokenRefreshed += OnTokenRefreshed;
-            
-            AddLogEntry("Authenticating...", LogLevel.Info);
-            UpdateStatus("Authenticating...");
-            
-            var result = await _authService.AuthenticateAsync(username, securePassword);
+
+            AddLogEntry("Starting browser authentication...", LogLevel.Info);
+            UpdateStatus("Waiting for authentication...");
+
+            var result = await _authService.AuthenticateInteractiveAsync(_cancellationTokenSource.Token);
 
             if (result.Success)
             {
                 _revocationService = new TokenRevocationService(_authService);
                 _backdoorService = new BackdoorDetectionService(_authService);
                 _riskyAccountService = new RiskyAccountService(_authService.GraphClient!);
-                
+
                 _revocationService.OnThrottled += OnThrottled;
-                
+
                 LoginPanel.IsVisible = false;
                 MainPanel.IsVisible = true;
-                
+
                 AuthStatusIndicator.Fill = new SolidColorBrush(Color.Parse("#107C10"));
                 AuthStatusText.Text = result.UserPrincipalName;
                 AuthMethodText.Text = $"({result.AuthMethod})";
                 SignOutButton.IsVisible = true;
                 HeaderSignOutButton.IsVisible = true;
-                
+
+                HeaderAuthIndicator.Fill = new SolidColorBrush(Color.Parse("#107C10"));
+                HeaderAuthText.Text = "Connected";
+
                 if (result.TokenExpiresOn.HasValue)
                 {
                     UpdateTokenStatus(result.TokenExpiresOn.Value);
                 }
-
-                PasswordInput.Text = "";
-                UsernameInput.Text = "";
 
                 AddLogEntry($"Connected as {result.UserPrincipalName}", LogLevel.Success);
                 UpdateStatus($"Connected as {result.DisplayName}");
@@ -328,17 +307,33 @@ public partial class MainWindow : Window
                 AddLogEntry("Authentication failed", LogLevel.Error);
             }
         }
-        catch (Exception)
+        catch (OperationCanceledException)
         {
-            ShowConnectionError("An unexpected error occurred during authentication");
+            AddLogEntry("Authentication cancelled by user", LogLevel.Warning);
+        }
+        catch (AuthenticationException ex)
+        {
+            ShowConnectionError(ex.Message);
+            AddLogEntry($"Authentication error: [{ex.ErrorCode}] {ex.Message}", LogLevel.Error);
+        }
+        catch (Exception ex)
+        {
+            ShowConnectionError($"An unexpected error occurred: {ex.Message}");
             AddLogEntry("Connection error occurred", LogLevel.Error);
         }
         finally
         {
             ConnectButton.IsEnabled = true;
-            ConnectButton.Content = "Authenticate";
-            PasswordInput.Text = "";
+            AuthInProgressPanel.IsVisible = false;
+            _cancellationTokenSource?.Dispose();
+            _cancellationTokenSource = null;
         }
+    }
+
+    private void CancelAuthButton_Click(object? sender, RoutedEventArgs e)
+    {
+        _cancellationTokenSource?.Cancel();
+        AddLogEntry("Authentication cancellation requested", LogLevel.Warning);
     }
 
     private void ShowConnectionError(string message)
@@ -376,25 +371,30 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SignOutButton_Click(object? sender, RoutedEventArgs e)
+    private async void SignOutButton_Click(object? sender, RoutedEventArgs e)
     {
+        if (_authService != null)
+        {
+            await _authService.SignOutAsync();
+        }
+
         _authService = null;
         _revocationService = null;
         _backdoorService = null;
         _riskyAccountService = null;
-        
+
         MainPanel.IsVisible = false;
         LoginPanel.IsVisible = true;
         SignOutButton.IsVisible = false;
         HeaderSignOutButton.IsVisible = false;
-        
+
         HeaderAuthIndicator.Fill = new SolidColorBrush(Color.Parse("#FFB900"));
         HeaderAuthText.Text = "Not Connected";
-        
+
         _activityLog.Clear();
         _findings.Clear();
         _riskyAccounts.Clear();
-        
+
         AddLogEntry("Signed out", LogLevel.Info);
         UpdateStatus("Disconnected");
     }

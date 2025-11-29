@@ -6,8 +6,11 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
+using Safeguard.Exceptions;
+using Safeguard.Infrastructure;
 using Safeguard.Models;
 
 namespace Safeguard.Services;
@@ -21,23 +24,37 @@ namespace Safeguard.Services;
 public class BackdoorDetectionService : IDisposable
 {
     private readonly AuthenticationService _authService;
+    private readonly ILogger<BackdoorDetectionService> _logger;
+    private readonly ResilientGraphOperations _graphOps;
+    private readonly ResilientHttpClientFactory _httpClientFactory;
     private readonly List<string> _knownFederationIssuers = new();
-    
-    private readonly HttpClient _httpClient;
+
+    private HttpClient? _httpClient;
     private bool _disposed;
-    
+
     private GraphServiceClient? _graphClient;
-    
+
     private readonly SemaphoreSlim _httpClientLock = new(1, 1);
 
-    public BackdoorDetectionService(AuthenticationService authService)
+    public BackdoorDetectionService(
+        AuthenticationService authService,
+        ResilienceConfiguration? resilienceConfig = null,
+        ILogger<BackdoorDetectionService>? logger = null)
     {
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
-        
-        _httpClient = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(30) // Prevent indefinite hangs
-        };
+        _logger = logger ?? LoggingConfiguration.GetLogger<BackdoorDetectionService>();
+
+        var config = resilienceConfig ?? new ResilienceConfiguration();
+        _graphOps = new ResilientGraphOperations(config, _logger);
+        _httpClientFactory = new ResilientHttpClientFactory(config, _logger);
+
+        // Wire up resilience events for logging
+        _graphOps.OnThrottled += (retryAfter, op) =>
+            _logger.LogWarning("Throttled during {Operation}, waiting {RetryAfter}s", op, retryAfter);
+        _graphOps.OnRetry += (attempt, delay, op) =>
+            _logger.LogDebug("Retry {Attempt} for {Operation}, delay {Delay}ms", attempt, op, delay);
+        _graphOps.OnCircuitOpened += op =>
+            _logger.LogWarning("Circuit breaker opened for {Operation}", op);
     }
 
     private GraphServiceClient GraphClient
@@ -68,24 +85,42 @@ public class BackdoorDetectionService : IDisposable
         }
     }
 
-    private async Task<bool> ConfigureHttpClientAuthAsync(CancellationToken cancellationToken)
+    private async Task<HttpClient> GetConfiguredHttpClientAsync(CancellationToken cancellationToken)
     {
         var accessToken = await _authService.GetAccessTokenAsync(cancellationToken);
         if (string.IsNullOrEmpty(accessToken))
         {
-            return false;
+            throw new AuthenticationException(
+                "Failed to obtain access token for HTTP request",
+                AuthenticationFailureReason.TokenExpired);
         }
-        
+
         await _httpClientLock.WaitAsync(cancellationToken);
         try
         {
-            _httpClient.DefaultRequestHeaders.Authorization = 
+            // Create or reuse resilient HTTP client
+            _httpClient ??= _httpClientFactory.CreateClient();
+            _httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-            return true;
+            return _httpClient;
         }
         finally
         {
             _httpClientLock.Release();
+        }
+    }
+
+    [Obsolete("Use GetConfiguredHttpClientAsync instead")]
+    private async Task<bool> ConfigureHttpClientAuthAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await GetConfiguredHttpClientAsync(cancellationToken);
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 

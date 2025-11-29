@@ -4,8 +4,11 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
+using Safeguard.Exceptions;
+using Safeguard.Infrastructure;
 using Safeguard.Models;
 
 namespace Safeguard.Services;
@@ -13,14 +16,46 @@ namespace Safeguard.Services;
 public class TokenRevocationService
 {
     private readonly AuthenticationService _authService;
-    private const int MaxRetries = 3;
-    private const int RetryDelayMs = 1000;
+    private readonly ILogger<TokenRevocationService> _logger;
+    private readonly ResilientGraphOperations _graphOps;
 
-    public event Action<int, string>? OnThrottled; // (retryAfterSeconds, operation)
+    public event Action<int, string>? OnThrottled;
+    public event Action<int, TimeSpan, string>? OnRetry;
+    public event Action<string>? OnCircuitOpened;
+    public event Action<string>? OnCircuitClosed;
 
-    public TokenRevocationService(AuthenticationService authService)
+    public TokenRevocationService(
+        AuthenticationService authService,
+        ResilienceConfiguration? resilienceConfig = null,
+        ILogger<TokenRevocationService>? logger = null)
     {
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+        _logger = logger ?? LoggingConfiguration.GetLogger<TokenRevocationService>();
+
+        var config = resilienceConfig ?? new ResilienceConfiguration();
+        _graphOps = new ResilientGraphOperations(config, _logger);
+
+        // Wire up resilience events
+        _graphOps.OnThrottled += (retryAfter, op) =>
+        {
+            _logger.LogWarning("Throttled during {Operation}, waiting {RetryAfter}s", op, retryAfter);
+            OnThrottled?.Invoke(retryAfter, op);
+        };
+        _graphOps.OnRetry += (attempt, delay, op) =>
+        {
+            _logger.LogDebug("Retry {Attempt} for {Operation}, delay {Delay}ms", attempt, op, delay);
+            OnRetry?.Invoke(attempt, delay, op);
+        };
+        _graphOps.OnCircuitOpened += op =>
+        {
+            _logger.LogWarning("Circuit breaker opened for {Operation}", op);
+            OnCircuitOpened?.Invoke(op);
+        };
+        _graphOps.OnCircuitClosed += op =>
+        {
+            _logger.LogInformation("Circuit breaker closed for {Operation}", op);
+            OnCircuitClosed?.Invoke(op);
+        };
     }
 
     private GraphServiceClient GraphClient => _authService.GraphClient;
@@ -38,10 +73,11 @@ public class TokenRevocationService
 
         try
         {
-            var user = await GetUserWithRetryAsync(userIdentifier, cancellationToken);
+            var user = await GetUserAsync(userIdentifier, cancellationToken);
 
             if (user == null)
             {
+                _logger.LogWarning("User not found: {UserIdentifier}", userIdentifier);
                 return new RevocationResult
                 {
                     Success = false,
@@ -49,7 +85,7 @@ public class TokenRevocationService
                 };
             }
 
-            var revocationSuccess = await ExecuteRevocationWithRetryAsync(user.Id!, cancellationToken);
+            var revocationSuccess = await ExecuteRevocationAsync(user.Id!, cancellationToken);
 
             if (revocationSuccess)
             {
@@ -193,14 +229,15 @@ public class TokenRevocationService
 
     public async Task<User?> GetUserInfoAsync(string userIdentifier, CancellationToken cancellationToken = default)
     {
-        return await GetUserWithRetryAsync(userIdentifier, cancellationToken);
+        return await GetUserAsync(userIdentifier, cancellationToken);
     }
 
     public async Task<List<User>> GetUsersAsync(int top = 100, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var response = await GraphClient.Users
+        _logger.LogDebug("Getting users list, top={Top}", top);
+
+        var response = await _graphOps.ExecuteAsync(
+            async () => await GraphClient.Users
                 .GetAsync(requestConfiguration =>
                 {
                     requestConfiguration.QueryParameters.Select = new[]
@@ -214,66 +251,44 @@ public class TokenRevocationService
                     requestConfiguration.QueryParameters.Top = top;
                     requestConfiguration.QueryParameters.Filter = "userType eq 'Member'";
                     requestConfiguration.QueryParameters.Orderby = new[] { "displayName" };
-                }, cancellationToken);
+                }, cancellationToken),
+            "GetUsers",
+            cancellationToken);
 
-            return response?.Value?.ToList() ?? new List<User>();
-        }
-        catch
-        {
-            return new List<User>();
-        }
+        var users = response?.Value?.ToList() ?? new List<User>();
+        _logger.LogDebug("Retrieved {Count} users", users.Count);
+        return users;
     }
 
-    private async Task<bool> ExecuteRevocationWithRetryAsync(string userId, CancellationToken cancellationToken)
+    private async Task<bool> ExecuteRevocationAsync(string userId, CancellationToken cancellationToken)
     {
-        for (var attempt = 1; attempt <= MaxRetries; attempt++)
-        {
-            try
-            {
-                var result = await GraphClient.Users[userId]
-                    .RevokeSignInSessions
-                    .PostAsRevokeSignInSessionsPostResponseAsync(cancellationToken: cancellationToken);
+        _logger.LogDebug("Executing token revocation for user {UserId}", userId);
 
-                if (result?.Value == true)
-                {
-                    return true;
-                }
-            }
-            catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (IsRetryableError(odataEx))
-            {
-                if (odataEx.Error?.Code == "TooManyRequests" || odataEx.ResponseStatusCode == 429)
-                {
-                    var retryAfter = GetRetryAfterSeconds(odataEx);
-                    OnThrottled?.Invoke(retryAfter, "Token Revocation");
-                    
-                    if (attempt < MaxRetries)
-                    {
-                        await Task.Delay(retryAfter * 1000, cancellationToken);
-                        continue;
-                    }
-                }
-                
-                if (attempt < MaxRetries)
-                {
-                    await Task.Delay(RetryDelayMs * attempt, cancellationToken);
-                }
-            }
-            catch
-            {
-                throw;
-            }
+        var result = await _graphOps.ExecuteAsync(
+            async () => await GraphClient.Users[userId]
+                .RevokeSignInSessions
+                .PostAsRevokeSignInSessionsPostResponseAsync(cancellationToken: cancellationToken),
+            "RevokeSignInSessions",
+            cancellationToken);
+
+        if (result?.Value == true)
+        {
+            _logger.LogInformation("Successfully revoked tokens for user {UserId}", userId);
+            return true;
         }
 
+        _logger.LogWarning("Token revocation returned false for user {UserId}", userId);
         return false;
     }
 
-    private async Task<User?> GetUserWithRetryAsync(string userIdentifier, CancellationToken cancellationToken)
+    private async Task<User?> GetUserAsync(string userIdentifier, CancellationToken cancellationToken)
     {
-        for (var attempt = 1; attempt <= MaxRetries; attempt++)
+        _logger.LogDebug("Looking up user {UserIdentifier}", userIdentifier);
+
+        try
         {
-            try
-            {
-                var user = await GraphClient.Users[userIdentifier]
+            var user = await _graphOps.ExecuteAsync(
+                async () => await GraphClient.Users[userIdentifier]
                     .GetAsync(requestConfiguration =>
                     {
                         requestConfiguration.QueryParameters.Select = new[]
@@ -287,69 +302,41 @@ public class TokenRevocationService
                             "accountEnabled",
                             "signInSessionsValidFromDateTime"
                         };
-                    }, cancellationToken);
+                    }, cancellationToken),
+                "GetUser",
+                cancellationToken);
 
-                return user;
-            }
-            catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.Error?.Code == "Request_ResourceNotFound")
-            {
-                return null;
-            }
-            catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.Error?.Code == "TooManyRequests" || odataEx.ResponseStatusCode == 429)
-            {
-                var retryAfter = GetRetryAfterSeconds(odataEx);
-                OnThrottled?.Invoke(retryAfter, "User Lookup");
-                
-                if (attempt < MaxRetries)
-                {
-                    await Task.Delay(retryAfter * 1000, cancellationToken);
-                }
-            }
-            catch when (attempt < MaxRetries)
-            {
-                await Task.Delay(RetryDelayMs * attempt, cancellationToken);
-            }
+            return user;
         }
-
-        return null;
-    }
-
-    private static int GetRetryAfterSeconds(Microsoft.Graph.Models.ODataErrors.ODataError error)
-    {
-        // Default to 60 seconds if not specified
-        const int defaultRetryAfter = 60;
-        
-        // Try to get Retry-After from inner error or headers
-        if (error.Error?.AdditionalData != null)
+        catch (GraphApiException ex) when (ex.ODataErrorCode == "Request_ResourceNotFound")
         {
-            if (error.Error.AdditionalData.TryGetValue("retry-after", out var retryValue) && 
-                retryValue is string retryStr && 
-                int.TryParse(retryStr, out var seconds))
-            {
-                return seconds;
-            }
+            _logger.LogDebug("User not found: {UserIdentifier}", userIdentifier);
+            return null;
         }
-        
-        return defaultRetryAfter;
     }
 
-    private static bool IsRetryableError(Microsoft.Graph.Models.ODataErrors.ODataError error)
-    {
-        var retryableCodes = new[] { "ServiceNotAvailable", "TooManyRequests", "InternalServerError" };
-        return retryableCodes.Contains(error.Error?.Code);
-    }
+    // Legacy methods for backward compatibility
+    [Obsolete("Use ExecuteRevocationAsync instead")]
+    private Task<bool> ExecuteRevocationWithRetryAsync(string userId, CancellationToken cancellationToken)
+        => ExecuteRevocationAsync(userId, cancellationToken);
+
+    [Obsolete("Use GetUserAsync instead")]
+    private Task<User?> GetUserWithRetryAsync(string userIdentifier, CancellationToken cancellationToken)
+        => GetUserAsync(userIdentifier, cancellationToken);
 
     #region MFA Reset Operations
 
     public async Task<List<AuthMethodInfo>> GetUserAuthMethodsAsync(string userId, CancellationToken cancellationToken = default)
     {
+        _logger.LogDebug("Getting authentication methods for user {UserId}", userId);
         var methods = new List<AuthMethodInfo>();
 
-        try
+        // Get Phone authentication methods
+        await TryGetAuthMethodAsync(async () =>
         {
-            // Get Phone authentication methods
-            var phoneMethods = await GraphClient.Users[userId].Authentication.PhoneMethods
-                .GetAsync(cancellationToken: cancellationToken);
+            var phoneMethods = await _graphOps.ExecuteAsync(
+                () => GraphClient.Users[userId].Authentication.PhoneMethods.GetAsync(cancellationToken: cancellationToken),
+                "GetPhoneMethods", cancellationToken);
             if (phoneMethods?.Value != null)
             {
                 methods.AddRange(phoneMethods.Value.Select(m => new AuthMethodInfo
@@ -359,10 +346,14 @@ public class TokenRevocationService
                     DisplayName = $"{m.PhoneType}: {m.PhoneNumber}"
                 }));
             }
+        }, "Phone", userId);
 
-            // Get Microsoft Authenticator methods
-            var authAppMethods = await GraphClient.Users[userId].Authentication.MicrosoftAuthenticatorMethods
-                .GetAsync(cancellationToken: cancellationToken);
+        // Get Microsoft Authenticator methods
+        await TryGetAuthMethodAsync(async () =>
+        {
+            var authAppMethods = await _graphOps.ExecuteAsync(
+                () => GraphClient.Users[userId].Authentication.MicrosoftAuthenticatorMethods.GetAsync(cancellationToken: cancellationToken),
+                "GetAuthenticatorMethods", cancellationToken);
             if (authAppMethods?.Value != null)
             {
                 methods.AddRange(authAppMethods.Value.Select(m => new AuthMethodInfo
@@ -372,10 +363,14 @@ public class TokenRevocationService
                     DisplayName = $"Authenticator: {m.DisplayName}"
                 }));
             }
+        }, "MicrosoftAuthenticator", userId);
 
-            // Get FIDO2 security keys
-            var fido2Methods = await GraphClient.Users[userId].Authentication.Fido2Methods
-                .GetAsync(cancellationToken: cancellationToken);
+        // Get FIDO2 security keys
+        await TryGetAuthMethodAsync(async () =>
+        {
+            var fido2Methods = await _graphOps.ExecuteAsync(
+                () => GraphClient.Users[userId].Authentication.Fido2Methods.GetAsync(cancellationToken: cancellationToken),
+                "GetFido2Methods", cancellationToken);
             if (fido2Methods?.Value != null)
             {
                 methods.AddRange(fido2Methods.Value.Select(m => new AuthMethodInfo
@@ -385,10 +380,14 @@ public class TokenRevocationService
                     DisplayName = $"FIDO2: {m.DisplayName}"
                 }));
             }
+        }, "Fido2", userId);
 
-            // Get Software OATH tokens
-            var softwareOathMethods = await GraphClient.Users[userId].Authentication.SoftwareOathMethods
-                .GetAsync(cancellationToken: cancellationToken);
+        // Get Software OATH tokens
+        await TryGetAuthMethodAsync(async () =>
+        {
+            var softwareOathMethods = await _graphOps.ExecuteAsync(
+                () => GraphClient.Users[userId].Authentication.SoftwareOathMethods.GetAsync(cancellationToken: cancellationToken),
+                "GetSoftwareOathMethods", cancellationToken);
             if (softwareOathMethods?.Value != null)
             {
                 methods.AddRange(softwareOathMethods.Value.Select(m => new AuthMethodInfo
@@ -398,10 +397,14 @@ public class TokenRevocationService
                     DisplayName = "Software OATH Token"
                 }));
             }
+        }, "SoftwareOath", userId);
 
-            // Get Windows Hello for Business methods
-            var whfbMethods = await GraphClient.Users[userId].Authentication.WindowsHelloForBusinessMethods
-                .GetAsync(cancellationToken: cancellationToken);
+        // Get Windows Hello for Business methods
+        await TryGetAuthMethodAsync(async () =>
+        {
+            var whfbMethods = await _graphOps.ExecuteAsync(
+                () => GraphClient.Users[userId].Authentication.WindowsHelloForBusinessMethods.GetAsync(cancellationToken: cancellationToken),
+                "GetWindowsHelloMethods", cancellationToken);
             if (whfbMethods?.Value != null)
             {
                 methods.AddRange(whfbMethods.Value.Select(m => new AuthMethodInfo
@@ -411,10 +414,14 @@ public class TokenRevocationService
                     DisplayName = $"Windows Hello: {m.DisplayName}"
                 }));
             }
+        }, "WindowsHelloForBusiness", userId);
 
-            // Get Email authentication methods
-            var emailMethods = await GraphClient.Users[userId].Authentication.EmailMethods
-                .GetAsync(cancellationToken: cancellationToken);
+        // Get Email authentication methods
+        await TryGetAuthMethodAsync(async () =>
+        {
+            var emailMethods = await _graphOps.ExecuteAsync(
+                () => GraphClient.Users[userId].Authentication.EmailMethods.GetAsync(cancellationToken: cancellationToken),
+                "GetEmailMethods", cancellationToken);
             if (emailMethods?.Value != null)
             {
                 methods.AddRange(emailMethods.Value.Select(m => new AuthMethodInfo
@@ -424,10 +431,14 @@ public class TokenRevocationService
                     DisplayName = $"Email: {m.EmailAddress}"
                 }));
             }
+        }, "Email", userId);
 
-            // Get Temporary Access Pass methods
-            var tapMethods = await GraphClient.Users[userId].Authentication.TemporaryAccessPassMethods
-                .GetAsync(cancellationToken: cancellationToken);
+        // Get Temporary Access Pass methods
+        await TryGetAuthMethodAsync(async () =>
+        {
+            var tapMethods = await _graphOps.ExecuteAsync(
+                () => GraphClient.Users[userId].Authentication.TemporaryAccessPassMethods.GetAsync(cancellationToken: cancellationToken),
+                "GetTapMethods", cancellationToken);
             if (tapMethods?.Value != null)
             {
                 methods.AddRange(tapMethods.Value.Select(m => new AuthMethodInfo
@@ -437,13 +448,28 @@ public class TokenRevocationService
                     DisplayName = "Temporary Access Pass"
                 }));
             }
-        }
-        catch
-        {
-            // Return whatever methods we were able to retrieve
-        }
+        }, "TemporaryAccessPass", userId);
 
+        _logger.LogDebug("Found {Count} authentication methods for user {UserId}", methods.Count, userId);
         return methods;
+    }
+
+    private async Task TryGetAuthMethodAsync(Func<Task> getMethod, string methodType, string userId)
+    {
+        try
+        {
+            await getMethod();
+        }
+        catch (GraphApiException ex) when (ex.ODataErrorCode == "Request_ResourceNotFound" || ex.ODataErrorCode == "Authentication_RequestsThrottled")
+        {
+            _logger.LogDebug("Could not retrieve {MethodType} methods for user {UserId}: {Error}",
+                methodType, userId, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to retrieve {MethodType} methods for user {UserId}",
+                methodType, userId);
+        }
     }
 
     public async Task<MfaResetResult> ResetUserMfaAsync(string userIdentifier, CancellationToken cancellationToken = default)
@@ -457,9 +483,11 @@ public class TokenRevocationService
             };
         }
 
+        _logger.LogInformation("Resetting MFA for user {UserIdentifier}", userIdentifier);
+
         try
         {
-            var user = await GetUserWithRetryAsync(userIdentifier, cancellationToken);
+            var user = await GetUserAsync(userIdentifier, cancellationToken);
 
             if (user == null)
             {

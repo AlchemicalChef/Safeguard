@@ -4,6 +4,7 @@ public class AppConfiguration
 {
     public AzureAdConfiguration AzureAd { get; set; } = new();
     public RevocationSettings RevocationSettings { get; set; } = new();
+    public ResilienceConfiguration Resilience { get; set; } = new();
 }
 
 public class AzureAdConfiguration
